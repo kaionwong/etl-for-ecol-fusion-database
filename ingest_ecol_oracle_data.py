@@ -148,17 +148,19 @@ def create_table_query(table_name, columns, constraints):
 def backup_oracle_to_postgres(tables=None, sample_size=None):
     try:
         logging.info("Starting backup operation from Oracle to PostgreSQL.")
+        
+        oracle_host = os.getenv('ECOLLISION_ORACLE_SQL_HOST_NAME')
+        oracle_port = os.getenv('ECOLLISION_ORACLE_SQL_PORT')
+        oracle_service = os.getenv('ECOLLISION_ORACLE_SQL_SERVICE_NAME')
 
         # Initialize OracleDB with connection details
         oracle_db = OracleDB(
-            host='ncc-production-qf14q-scan.exacc.ds.gov.ab.ca',
-            port=1521,
-            service='AT12PRD.WORLD'
+            oracle_host, oracle_port, oracle_service
         )
         
         # Connect to PostgreSQL (replace with your PostgreSQL connection details)
-        postgres_host = 'localhost'
-        postgres_db_name = 'ecollision_fusion_dev'
+        postgres_host = os.getenv('ECOLLISION_FUSION_SQL_HOST_NAME')
+        postgres_db_name = os.getenv('ECOLLISION_FUSION_SQL_DATABASE_NAME')
         postgres_user = os.getenv('ECOLLISION_FUSION_SQL_USERNAME')
         postgres_password = os.getenv('ECOLLISION_FUSION_SQL_PASSWORD')
         
@@ -228,4 +230,4 @@ if __name__ == "__main__":
     
     # tables_to_backup = ['COLLISIONS']  # Change this to a list of table names to specify, e.g., ['COLLISIONS']
     
-    backup_oracle_to_postgres(tables=tables_to_backup, sample_size=1280)  # Specify sample size or None for full data
+    backup_oracle_to_postgres(tables=tables_to_backup, sample_size=105)  # Specify sample size or None for full data
