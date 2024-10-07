@@ -115,7 +115,8 @@ def map_oracle_to_postgres(data_type):
     return pg_type
 
 def create_table_query(table_name, columns, constraints):
-    """ Construct CREATE TABLE statement for PostgreSQL """
+    """ Construct CREATE TABLE statement for PostgreSQL with a prefix."""
+    prefixed_table_name = f"oracle_{table_name}"
     column_definitions = []
     primary_key_columns = []
 
@@ -125,26 +126,23 @@ def create_table_query(table_name, columns, constraints):
         null_constraint = '' if nullable == 'Y' else 'NOT NULL'
         column_definitions.append(f"{column_name} {pg_data_type} {null_constraint}")
 
-        # Check for 'id' column to be the primary key
         if column_name.lower() == 'id':
             primary_key_columns.append(column_name)
 
-    # Add primary key definition if 'id' is present
     if primary_key_columns:
         primary_key_definition = f"PRIMARY KEY ({', '.join(primary_key_columns)})"
         constraints_definitions = [primary_key_definition]
     else:
         constraints_definitions = []
 
-    # Add any additional constraints from Oracle
     for constraint in constraints:
         constraint_name, constraint_type, r_constraint_name = constraint
-        if constraint_type == 'R':  # Foreign Key
+        if constraint_type == 'R':
             constraints_definitions.append(f"FOREIGN KEY ({constraint_name}) REFERENCES {r_constraint_name}")
 
     all_definitions = ",\n".join(column_definitions + constraints_definitions)
-    create_query = f"CREATE TABLE IF NOT EXISTS {table_name} (\n{all_definitions}\n);"
-    logging.debug(f"Create table query for {table_name}: {create_query}")
+    create_query = f"CREATE TABLE IF NOT EXISTS {prefixed_table_name} (\n{all_definitions}\n);"
+    logging.debug(f"Create table query for {prefixed_table_name}: {create_query}")
     return create_query
 
 def backup_oracle_to_postgres(tables=None, sample_size=None):
@@ -203,13 +201,14 @@ def backup_oracle_to_postgres(tables=None, sample_size=None):
             _, data = oracle_db.query_without_param(data_query)
 
             # Insert data into PostgreSQL table
-            insert_query = f"INSERT INTO {table_name} ({', '.join([col[0] for col in columns])}) VALUES ({', '.join(['%s'] * len(columns))})"
+            prefixed_table_name = f"oracle_{table_name}"
+            insert_query = f"INSERT INTO {prefixed_table_name} ({', '.join([col[0] for col in columns])}) VALUES ({', '.join(['%s'] * len(columns))})"
             
             for row in data:
                 try:
                     postgres_db.execute_query(insert_query, row)
                 except Exception as e:
-                    logging.error(f"Error inserting row into {table_name}: {row}. Error: {e}")
+                    logging.error(f"Error inserting row into {prefixed_table_name}: {row}. Error: {e}")
 
         # Close connections
         oracle_db.close_connection()
@@ -222,9 +221,11 @@ def backup_oracle_to_postgres(tables=None, sample_size=None):
 if __name__ == "__main__":
     # Specify the tables to backup, or set to None to backup all tables
     # tables_to_backup = None  # Change this to a list of table names to specify, e.g., ['COLLISIONS', 'CL_OBJECTS'] 
-    tables_to_backup = ['COLLISIONS', 'CL_OBJECTS', 'CLOBJ_PARTY_INFO', 'CLOBJ_PROPERTY_INFO', 'ECR_COLL_PLOTTING_INFO',
-                        'CODE_TYPE_VALUES', 'CODE_TYPES', 'CL_STATUS_HISTORY', 'ECR_SYNCHRONIZATION_ACTION_LOG']  # Change this to a list of table names to specify, e.g., ['COLLISIONS', 'CL_OBJECTS'] 
-    sample_size = 200  # Change this to None to copy the entire dataset
-    backup_oracle_to_postgres(tables=tables_to_backup, sample_size=sample_size)
-
-    logging.info('Backup operation completed.')
+    
+    # tables_to_backup = ['COLLISIONS', 'CL_OBJECTS', 'CLOBJ_PARTY_INFO', 'CLOBJ_PROPERTY_INFO', 'ECR_COLL_PLOTTING_INFO',
+    #                     'CODE_TYPE_VALUES', 'CODE_TYPES', 'CL_STATUS_HISTORY', 'ECR_SYNCHRONIZATION_ACTION',
+    #                     'ECR_SYNCHRONIZATION_ACTION_LOG']  # Change this to a list of table names to specify, e.g., ['COLLISIONS']
+    
+    tables_to_backup = ['COLLISIONS']  # Change this to a list of table names to specify, e.g., ['COLLISIONS']
+    
+    backup_oracle_to_postgres(tables=tables_to_backup, sample_size=None)  # Specify sample size or None for full data
