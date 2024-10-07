@@ -1,9 +1,0 @@
-- [x] ingesting/backing up database table from oracle to fusion
-- [x] manually check if the backup/import into fusion is accurate
-- [] add foreign key relationships between tables
-- [] ingest/backup eCollision analytics
-- [] ingest/backup mainframe data; with field name matching or remapping (to map the column name, format and constraints like analytics)
-- [] run script to process oracle import to create "valid" cases; may have to revisit the valid definition by excluding those entered after year end (second monday of Feb?)
-- [] further standardize the format of oracle import, if necessary (to map the column name, format and constraints like analytics)
-- [] final merge into the fusion data
-- [] host it securely online so other team member can access
