@@ -230,4 +230,4 @@ if __name__ == "__main__":
     
     # tables_to_backup = ['COLLISIONS']  # Change this to a list of table names to specify, e.g., ['COLLISIONS']
     
-    backup_oracle_to_postgres(tables=tables_to_backup, sample_size=168)  # Specify sample size or None for full data
+    backup_oracle_to_postgres(tables=tables_to_backup, sample_size=50)  # Specify sample size or None for full data

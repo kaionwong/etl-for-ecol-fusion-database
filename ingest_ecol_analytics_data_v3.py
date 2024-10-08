@@ -35,7 +35,6 @@ class AnalyticsDB:
         self.conn.close()
 
     def get_table_columns(self, table_name):
-        # Modify the query to retrieve table metadata for the new database
         query = f"""
         SELECT column_name, data_type, character_maximum_length, is_nullable
         FROM information_schema.columns
@@ -47,7 +46,6 @@ class AnalyticsDB:
         return columns
 
     def get_constraints(self, table_name):
-        # Modify to fetch constraints for the new database
         query = f"""
         SELECT constraint_name, constraint_type
         FROM information_schema.table_constraints
@@ -122,7 +120,14 @@ def create_table_query(table_name, columns, constraints):
         column_defs.append(f"PRIMARY KEY ({', '.join(primary_keys)})")
     
     all_defs = column_defs
-    create_query = f"CREATE TABLE {table_name} ({', '.join(all_defs)});"
+    create_query = f"""
+    DO $$
+    BEGIN
+        IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '{table_name.lower()}') THEN
+            CREATE TABLE {table_name} ({', '.join(all_defs)});
+        END IF;
+    END $$;
+    """
     
     logging.debug(f"Generated CREATE TABLE query: {create_query}")
     return create_query
@@ -163,11 +168,18 @@ def backup_analytics_to_postgres(tables=None, sample_size=None):
 
             # Construct PostgreSQL table creation query
             create_query = create_table_query(table_name, columns, constraints)
-            postgres_db.execute_query(create_query)
+            try:
+                postgres_db.execute_query(create_query)
+            except Exception as e:
+                if "relation" in str(e) and "already exists" in str(e):
+                    logging.warning(f"Table {table_name} already exists, skipping creation.")
+                else:
+                    logging.error(f"Error creating table {table_name}: {e}")
+                    continue
 
             # Get data from New DB table
             if sample_size is not None:
-                data_query = f"SELECT TOP {sample_size} * FROM {table_name}"  # Sample data
+                data_query = f"SELECT * FROM {table_name} LIMIT {sample_size}"  # Sample data
             else:
                 data_query = f"SELECT * FROM {table_name}"  # Full data
 
@@ -194,22 +206,6 @@ def backup_analytics_to_postgres(tables=None, sample_size=None):
 
 if __name__ == "__main__":
     # Specify the tables to backup, or set to None to backup all tables
-    # tables_to_backup = None  # Change this to a list of table names to specify, e.g., ['COLLISIONS', 'CL_OBJECTS'] 
-    
-    tables_to_backup = ['COLLISIONS']  # Change this to a list of table names to specify, e.g., ['COLLISIONS']
+    tables_to_backup = ['COLLISIONS']  # Change this to a list of table names to specify
     
     backup_analytics_to_postgres(tables=tables_to_backup, sample_size=125)  # Specify sample size or None for full data
-
-
-
-
-
-
-
-# if __name__ == "__main__":
-    # Specify the tables to backup, or set to None to backup all tables
-    # tables_to_backup = None  # Change this to a list of table names to specify, e.g., ['COLLISIONS', 'CL_OBJECTS'] 
-    
-    # tables_to_backup = ['COLLISIONS', 'CL_OBJECTS', 'CLOBJ_PARTY_INFO', 'CLOBJ_PROPERTY_INFO', 'ECR_COLL_PLOTTING_INFO',
-    #                     'CODE_TYPE_VALUES', 'CODE_TYPES', 'CL_STATUS_HISTORY', 'ECR_SYNCHRONIZATION_ACTION_ETL',
-    #                     'ECR_SYNCHRONIZATION_ACTION_LOG_ETL']  # Change this to a list of table names to specify, e.g., ['COLLISIONS']
