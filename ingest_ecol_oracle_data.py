@@ -9,17 +9,15 @@ import logging
 logging.basicConfig(level=logging.ERROR, 
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
-class OracleDB:
-    def __init__(self, host, port, service):
-        load_dotenv()
-        self.username = os.getenv('ECOLLISION_ORACLE_SQL_USERNAME')
-        self.password = os.getenv('ECOLLISION_ORACLE_SQL_PASSWORD')
+load_dotenv()
 
+class OracleDB:
+    def __init__(self, username, password, host, port, service):
         # Oracle Instant Client setup
-        oracle_instant_client_dir = 'C:\\Users\\kai.wong\\_local_dev\\oracle_instant_client\\instantclient-basic-windows.x64-23.4.0.24.05\\instantclient_23_4'
+        oracle_instant_client_dir = os.getenv('ORACLE_INSTANT_CLIENT_DIR')
         cx_Oracle.init_oracle_client(lib_dir=oracle_instant_client_dir)
 
-        self.conn_str = f"{self.username}/{self.password}@//{host}:{port}/{service}"
+        self.conn_str = f"{username}/{password}@//{host}:{port}/{service}"
         logging.debug(f"Connecting to Oracle DB with connection string: {self.conn_str}")
         self.conn = cx_Oracle.connect(self.conn_str)
 
@@ -68,7 +66,7 @@ class OracleDB:
         return self.query_without_param(query)[1][0][0]  # Returns the owner
 
 class PostgreSQLDB:
-    def __init__(self, host, database, user, password):
+    def __init__(self, user, password, host, database):
         self.conn = psycopg2.connect(
             host=host,
             database=database,
@@ -149,13 +147,15 @@ def backup_oracle_to_postgres(tables=None, sample_size=None):
     try:
         logging.info("Starting backup operation from Oracle to PostgreSQL.")
         
+        oracle_username = os.getenv('ECOLLISION_ORACLE_SQL_USERNAME')
+        oracle_password = os.getenv('ECOLLISION_ORACLE_SQL_PASSWORD')
         oracle_host = os.getenv('ECOLLISION_ORACLE_SQL_HOST_NAME')
         oracle_port = os.getenv('ECOLLISION_ORACLE_SQL_PORT')
         oracle_service = os.getenv('ECOLLISION_ORACLE_SQL_SERVICE_NAME')
 
         # Initialize OracleDB with connection details
         oracle_db = OracleDB(
-            oracle_host, oracle_port, oracle_service
+            oracle_username, oracle_password,oracle_host, oracle_port, oracle_service
         )
         
         # Connect to PostgreSQL (replace with your PostgreSQL connection details)
@@ -164,7 +164,7 @@ def backup_oracle_to_postgres(tables=None, sample_size=None):
         postgres_user = os.getenv('ECOLLISION_FUSION_SQL_USERNAME')
         postgres_password = os.getenv('ECOLLISION_FUSION_SQL_PASSWORD')
         
-        postgres_db = PostgreSQLDB(postgres_host, postgres_db_name, postgres_user, postgres_password)
+        postgres_db = PostgreSQLDB(postgres_user, postgres_password, postgres_host, postgres_db_name)
 
         # If tables is None, get all tables from Oracle
         if tables is None:
@@ -230,4 +230,4 @@ if __name__ == "__main__":
     
     # tables_to_backup = ['COLLISIONS']  # Change this to a list of table names to specify, e.g., ['COLLISIONS']
     
-    backup_oracle_to_postgres(tables=tables_to_backup, sample_size=105)  # Specify sample size or None for full data
+    backup_oracle_to_postgres(tables=tables_to_backup, sample_size=168)  # Specify sample size or None for full data
