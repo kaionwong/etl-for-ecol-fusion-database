@@ -1,3 +1,7 @@
+# todo: fix primary key column not imported properly
+# todo: ensure primary key is unique
+# todo: some tables aren't populating (likely due to PK issues)
+
 import psycopg2
 import pyodbc
 import pandas as pd
