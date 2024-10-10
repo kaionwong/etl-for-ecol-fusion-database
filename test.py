@@ -18,10 +18,12 @@ class AnalyticsDB:
         self.conn_str += f'Server={db_server};'
         self.conn_str += f'Database={db_name};'
         self.conn_str += f'Trusted_Connection={db_trusted_connection};'
-    
+        
+        logging.debug(f"Connecting to Analytics DB with connection string: {self.conn_str}")
         self.conn = pyodbc.connect(self.conn_str)
 
     def query_without_param(self, query):
+
         logging.debug(f"Executing query: {query}")
         cursor = self.conn.cursor()
         result = cursor.execute(query).fetchall()
@@ -31,7 +33,7 @@ class AnalyticsDB:
         return header, result
     
     def close_connection(self):
-        logging.debug("Closing New Source DB connection.")
+        logging.debug("Closing eCollision Analytics DB connection.")
         self.conn.close()
 
     def get_table_columns(self, table_name):
@@ -40,7 +42,7 @@ class AnalyticsDB:
         FROM information_schema.columns
         WHERE table_name = '{table_name.lower()}'
         """
-        logging.debug(f"Executing query to get columns: {query}")
+        logging.debug(f"Executing query to get columns for table: {table_name}. Query: {query}")
         headers, columns = self.query_without_param(query)
         logging.debug(f"Columns retrieved for {table_name}: {columns}")        
         return columns
@@ -51,11 +53,14 @@ class AnalyticsDB:
         FROM information_schema.table_constraints
         WHERE table_name = '{table_name.lower()}'
         """
-        logging.debug(f"Getting constraints for table: {table_name}")
-        return self.query_without_param(query)[1]
+        logging.debug(f"Getting constraints for table: {table_name}. Query: {query}")
+        constraints = self.query_without_param(query)[1]
+        logging.debug(f"Constraints retrieved for {table_name}: {constraints}")
+        return constraints
 
 class PostgreSQLDB:
     def __init__(self, user, password, host, database):
+        logging.debug(f"Connecting to PostgreSQL DB at {host} with database: {database}")
         self.conn = psycopg2.connect(
             host=host,
             database=database,
@@ -76,6 +81,7 @@ class PostgreSQLDB:
         except Exception as e:
             logging.error(f"Error executing query: {query}. Error: {e}")
             self.conn.rollback()  # Rollback the transaction on failure
+            logging.debug("Transaction rolled back due to error.")
             raise  # Re-raise the exception after rollback
         else:
             self.conn.commit()  # Commit the transaction if no errors occur
@@ -138,6 +144,8 @@ def map_analytics_db_to_postgres(data_type):
     return pg_type
 
 def create_table_query(table_name, columns, constraints):
+    # Prefix the table name with 'analytics_'
+    prefixed_table_name = f"analytics_{table_name}"
     column_defs = []
     primary_keys = []
     unique_constraints = []
@@ -167,18 +175,18 @@ def create_table_query(table_name, columns, constraints):
     create_query = f"""
     DO $$
     BEGIN
-        IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '{table_name.lower()}') THEN
-            CREATE TABLE {table_name} ({', '.join(all_defs)});
+        IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '{prefixed_table_name.lower()}') THEN
+            CREATE TABLE {prefixed_table_name} ({', '.join(all_defs)});
         END IF;
     END $$;
     """
     
-    logging.debug(f"Generated CREATE TABLE query: {create_query}")
+    logging.debug(f"Generated CREATE TABLE query for {prefixed_table_name}: {create_query}")
     return create_query
 
 def backup_analytics_to_postgres(tables=None, sample_size=None):
     try:
-        logging.info("Starting backup operation from New Source DB to PostgreSQL.")
+        logging.info("Starting backup operation from eCollision AnalyticsDB to PostgreSQL.")
         
         # Environment variable extraction
         analytics_db_driver = os.getenv('ECOLLISION_ANALYTICS_SQL_DRIVER')
@@ -186,7 +194,8 @@ def backup_analytics_to_postgres(tables=None, sample_size=None):
         analytics_db_name = os.getenv('ECOLLISION_ANALYTICS_SQL_DATABASE_NAME')
         analytics_db_trusted_connection = os.getenv('ECOLLISION_ANALYTICS_SQL_TRUSTED_CONNECTION')
         
-        # Initialize NewSourceDB
+        # Initialize eCollision Analytics
+        logging.debug("Initializing AnalyticsDB connection.")
         analytics_db = AnalyticsDB(analytics_db_name, analytics_db_server, analytics_db_driver, analytics_db_trusted_connection)
         
         # Connect to PostgreSQL
@@ -195,64 +204,77 @@ def backup_analytics_to_postgres(tables=None, sample_size=None):
         postgres_user = os.getenv('ECOLLISION_FUSION_SQL_USERNAME')
         postgres_password = os.getenv('ECOLLISION_FUSION_SQL_PASSWORD')
         
+        logging.debug("Connecting to PostgreSQL DB.")
         postgres_db = PostgreSQLDB(postgres_user, postgres_password, postgres_host, postgres_db_name)
 
         if tables is None:
-            new_db_tables_query = """
+            analytics_db_tables_query = """
             SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'
             """
-            headers, tables = analytics_db.query_without_param(new_db_tables_query)
+            headers, tables = analytics_db.query_without_param(analytics_db_tables_query)
 
         if not tables:
-            logging.warning("No tables found in the New Source DB.")
+            logging.warning("No tables found in the eCollision Analytics DB.")
             return
 
         for table in tables:
             table_name = table if isinstance(table, str) else table[0]
+            logging.debug(f"Processing table: {table_name}")
             columns = analytics_db.get_table_columns(table_name)
             constraints = analytics_db.get_constraints(table_name)
             create_query = create_table_query(table_name, columns, constraints)
 
             try:
+                logging.debug(f"Executing create table query for {table_name}.")
                 postgres_db.execute_query(create_query)
             except Exception as e:
-                if "relation" in str(e) and "already exists" in str(e):
-                    logging.warning(f"Table {table_name} already exists, skipping creation.")
-                else:
-                    logging.error(f"Error creating table {table_name}: {e}")
-                    continue
-            
-            # Construct data fetching query
-            data_query = f"SELECT * FROM {table_name} LIMIT {sample_size}" if sample_size else f"SELECT * FROM {table_name}"
-            logging.debug(f"Fetching data from New Source DB table: {table_name}")
-            _, data = analytics_db.query_without_param(data_query)
-
-            if not data:
-                logging.warning(f"No data found in table: {table_name}")
+                logging.error(f"Failed to create table {table_name}: {e}")
                 continue
-            
-            prefixed_table_name = f"analytics_{table_name}"
-            insert_query = f"INSERT INTO {prefixed_table_name} ({', '.join([col[0] for col in columns])}) VALUES ({', '.join(['%s'] * len(columns))})"
-            
+
+            select_query = f"SELECT TOP {sample_size} * FROM {table_name}" if sample_size else f"SELECT * FROM {table_name}"
+            logging.debug(f"Selecting data from {table_name}. Query: {select_query}")
+            header, data = analytics_db.query_without_param(select_query)
+
             for row in data:
+                insert_query = f"INSERT INTO analytics_{table_name} ({', '.join(header)}) VALUES ({', '.join(['%s'] * len(row))})"
+                logging.debug(f"Inserting data into {table_name}: {row}")
                 try:
                     postgres_db.execute_query(insert_query, row)
                 except Exception as e:
-                    logging.error(f"Error inserting row into {prefixed_table_name}: {row}. Error: {e}")
+                    logging.error(f"Failed to insert row into {table_name}: {row}. Error: {e}")
 
-    except Exception as e:
-        logging.error(f"Backup operation failed: {e}")
-    
-    finally:
-        # Ensure connections are closed in case of an error
-        if 'analytics_db' in locals():
-            analytics_db.close_connection()
-        if 'postgres_db' in locals():
-            postgres_db.close_connection()
+        # Closing connections
+        logging.debug("Closing database connections.")
+        analytics_db.close_connection()
+        postgres_db.close_connection()
         logging.info("Backup operation completed successfully.")
 
+    except Exception as e:
+        logging.error(f"An error occurred during the backup process: {e}")
+
 if __name__ == "__main__":
-    # Specify the tables to backup, or set to None to backup all tables
-    tables_to_backup = ['COLLISIONS']  # Change this to a list of table names to specify
+    # Load environment variables
+    analytics_db_driver = os.getenv('ECOLLISION_ANALYTICS_SQL_DRIVER')
+    analytics_db_server = os.getenv('ECOLLISION_ANALYTICS_SQL_SERVER').replace('\\\\', '\\')
+    analytics_db_name = os.getenv('ECOLLISION_ANALYTICS_SQL_DATABASE_NAME')
+    analytics_db_trusted_connection = os.getenv('ECOLLISION_ANALYTICS_SQL_TRUSTED_CONNECTION')
+        
+    # Initialize eCollision Analytics
+    logging.debug("Initializing AnalyticsDB connection.")
+    analytics_db = AnalyticsDB(analytics_db_name, analytics_db_server, analytics_db_driver, analytics_db_trusted_connection)
     
-    backup_analytics_to_postgres(tables=tables_to_backup, sample_size=2)  # Specify sample size or None for full data
+    # Define a test query
+    test_query = "SELECT top 100 * FROM [eCollisionAnalytics].[ECRDBA].[COLLISIONS]"  # Replace 'your_table_name' with an actual table name
+
+    try:
+        # Execute the test query
+        headers, results = analytics_db.query_without_param(test_query)
+
+        # Output the results to the console
+        print(f"Query Headers: {headers}")
+        print("Query Results:")
+        for row in results:
+            print(row)
+            
+    except Exception as e:
+        logging.error(f"An error occurred while executing the query: {e}")
