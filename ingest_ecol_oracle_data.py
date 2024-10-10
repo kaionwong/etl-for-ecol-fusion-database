@@ -12,12 +12,12 @@ logging.basicConfig(level=logging.ERROR,
 load_dotenv()
 
 class OracleDB:
-    def __init__(self, username, password, host, port, service):
+    def __init__(self, username, password, db_host, db_port, db_service):
         # Oracle Instant Client setup
         oracle_instant_client_dir = os.getenv('ORACLE_INSTANT_CLIENT_DIR')
         cx_Oracle.init_oracle_client(lib_dir=oracle_instant_client_dir)
 
-        self.conn_str = f"{username}/{password}@//{host}:{port}/{service}"
+        self.conn_str = f"{username}/{password}@//{db_host}:{db_port}/{db_service}"
         logging.debug(f"Connecting to Oracle DB with connection string: {self.conn_str}")
         self.conn = cx_Oracle.connect(self.conn_str)
 
@@ -98,17 +98,62 @@ class PostgreSQLDB:
         logging.debug("Closing PostgreSQL DB connection.")
         self.conn.close()
 
+# def map_oracle_to_postgres(data_type):
+#     """ Map Oracle data types to PostgreSQL data types """
+#     mapping = {
+#         'VARCHAR2': 'VARCHAR',
+#         'NUMBER': 'NUMERIC',
+#         'DATE': 'TIMESTAMP',
+#         'CHAR': 'CHAR',
+#         'FLOAT': 'DOUBLE PRECISION',
+#         # Add more mappings as needed
+#     }
+#     pg_type = mapping.get(data_type, 'TEXT')  # Default to TEXT if type not found
+#     logging.debug(f"Mapping Oracle type '{data_type}' to PostgreSQL type '{pg_type}'")
+#     return pg_type
+
 def map_oracle_to_postgres(data_type):
     """ Map Oracle data types to PostgreSQL data types """
     mapping = {
+        # String types
         'VARCHAR2': 'VARCHAR',
-        'NUMBER': 'NUMERIC',
-        'DATE': 'TIMESTAMP',
+        'NVARCHAR2': 'VARCHAR',            # Oracle NVARCHAR2 -> PostgreSQL VARCHAR
         'CHAR': 'CHAR',
+        'NCHAR': 'CHAR',
+        'CLOB': 'TEXT',                    # Oracle CLOB -> PostgreSQL TEXT
+        'NCLOB': 'TEXT',                   # Oracle NCLOB -> PostgreSQL TEXT
+
+        # Numeric types
+        'NUMBER': 'NUMERIC',               # Oracle NUMBER -> PostgreSQL NUMERIC (with precision support)
+        'BINARY_FLOAT': 'REAL',            # Oracle BINARY_FLOAT -> PostgreSQL REAL
+        'BINARY_DOUBLE': 'DOUBLE PRECISION', # Oracle BINARY_DOUBLE -> PostgreSQL DOUBLE PRECISION
         'FLOAT': 'DOUBLE PRECISION',
-        # Add more mappings as needed
+        'INTEGER': 'INTEGER',
+        'SMALLINT': 'SMALLINT',
+        
+        # Date/Time types
+        'DATE': 'TIMESTAMP',               # Oracle DATE -> PostgreSQL TIMESTAMP
+        'TIMESTAMP': 'TIMESTAMP',          # Oracle TIMESTAMP -> PostgreSQL TIMESTAMP
+        'TIMESTAMP WITH TIME ZONE': 'TIMESTAMPTZ', # Oracle TIMESTAMP WITH TIME ZONE -> PostgreSQL TIMESTAMPTZ
+        'TIMESTAMP WITH LOCAL TIME ZONE': 'TIMESTAMPTZ', # Similar handling
+
+        # Boolean type
+        'BOOLEAN': 'BOOLEAN',              # PostgreSQL has native BOOLEAN support (Oracle does not)
+
+        # Binary types
+        'BLOB': 'BYTEA',                   # Oracle BLOB -> PostgreSQL BYTEA
+        'RAW': 'BYTEA',                    # Oracle RAW -> PostgreSQL BYTEA
+        'LONG RAW': 'BYTEA',               # Oracle LONG RAW -> PostgreSQL BYTEA
+
+        # Other types
+        'ROWID': 'TEXT',                   # Oracle ROWID -> PostgreSQL TEXT
+        'UROWID': 'TEXT',                  # Oracle UROWID -> PostgreSQL TEXT
+        'XMLTYPE': 'XML',                  # Oracle XMLTYPE -> PostgreSQL XML
+        'LONG': 'TEXT',                    # Oracle LONG -> PostgreSQL TEXT
     }
-    pg_type = mapping.get(data_type, 'TEXT')  # Default to TEXT if type not found
+
+    # Default to TEXT if the type is not mapped
+    pg_type = mapping.get(data_type.upper(), 'TEXT')  
     logging.debug(f"Mapping Oracle type '{data_type}' to PostgreSQL type '{pg_type}'")
     return pg_type
 
@@ -230,4 +275,4 @@ if __name__ == "__main__":
     
     # tables_to_backup = ['COLLISIONS']  # Change this to a list of table names to specify, e.g., ['COLLISIONS']
     
-    backup_oracle_to_postgres(tables=tables_to_backup, sample_size=50)  # Specify sample size or None for full data
+    backup_oracle_to_postgres(tables=tables_to_backup, sample_size=328)  # Specify sample size or None for full data

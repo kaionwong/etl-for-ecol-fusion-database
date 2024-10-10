@@ -12,13 +12,13 @@ logging.basicConfig(level=logging.DEBUG,
 load_dotenv()
 
 class AnalyticsDB:
-    def __init__(self, database_name, database_server, database_driver, database_trusted_connection):
+    def __init__(self, db_name, db_server, db_driver, db_trusted_connection):
         self.conn_str = ''
-        self.conn_str += f'Driver={database_driver};'
-        self.conn_str += f'Server={database_server};'
-        self.conn_str += f'Database={database_name};'
-        self.conn_str += f'Trusted_Connection={database_trusted_connection};'
-        
+        self.conn_str += f'Driver={db_driver};'
+        self.conn_str += f'Server={db_server};'
+        self.conn_str += f'Database={db_name};'
+        self.conn_str += f'Trusted_Connection={db_trusted_connection};'
+    
         self.conn = pyodbc.connect(self.conn_str)
 
     def query_without_param(self, query):
@@ -42,7 +42,7 @@ class AnalyticsDB:
         """
         logging.debug(f"Executing query to get columns: {query}")
         headers, columns = self.query_without_param(query)
-        logging.debug(f"Columns retrieved for {table_name}: {columns}")
+        logging.debug(f"Columns retrieved for {table_name}: {columns}")        
         return columns
 
     def get_constraints(self, table_name):
@@ -88,37 +88,81 @@ class PostgreSQLDB:
         self.conn.close()
 
 def map_analytics_db_to_postgres(data_type):
-    """ Map new source database types to PostgreSQL data types """
+    """ Map MS SQL Server types to PostgreSQL data types """
     mapping = {
+        # String types
         'varchar': 'VARCHAR',
+        'nvarchar': 'VARCHAR',            # SQL Server nvarchar
+        'char': 'CHAR',
+        'nchar': 'CHAR',
+        'text': 'TEXT',
+        'ntext': 'TEXT',
+
+        # Integer types
         'int': 'INTEGER',
+        'smallint': 'SMALLINT',
+        'tinyint': 'SMALLINT',            # PostgreSQL does not have TINYINT; SMALLINT is closest
+        'bigint': 'BIGINT',
+
+        # Decimal and float types
+        'decimal': 'DECIMAL',
+        'numeric': 'NUMERIC',
         'float': 'DOUBLE PRECISION',
-        'timestamp': 'TIMESTAMP',
-        # Add more mappings as needed for the new DB
+        'real': 'REAL',                   # SQL Server REAL -> PostgreSQL REAL
+        
+        # Date and time types
+        'datetime': 'TIMESTAMP',
+        'datetime2': 'TIMESTAMP',         # SQL Server datetime2 -> PostgreSQL TIMESTAMP
+        'smalldatetime': 'TIMESTAMP',     # SQL Server smalldatetime -> PostgreSQL TIMESTAMP
+        'date': 'DATE',
+        'time': 'TIME',
+
+        # Boolean types
+        'bit': 'BOOLEAN',                 # SQL Server bit -> PostgreSQL BOOLEAN
+
+        # Binary types
+        'binary': 'BYTEA',
+        'varbinary': 'BYTEA',
+        'image': 'BYTEA',
+
+        # Other types
+        'uniqueidentifier': 'UUID',       # SQL Server uniqueidentifier -> PostgreSQL UUID
+        'xml': 'XML',
+        'money': 'NUMERIC',               # SQL Server money -> PostgreSQL NUMERIC
+        'smallmoney': 'NUMERIC',          # SQL Server smallmoney -> PostgreSQL NUMERIC
     }
-    pg_type = mapping.get(data_type.lower(), 'TEXT')  # Default to TEXT if type not found
-    logging.debug(f"Mapping new DB type '{data_type}' to PostgreSQL type '{pg_type}'")
+
+    # Default to TEXT if the type is not mapped
+    pg_type = mapping.get(data_type.lower(), 'TEXT')  
+    logging.debug(f"Mapping MS SQL Server type '{data_type}' to PostgreSQL type '{pg_type}'")
     return pg_type
 
 def create_table_query(table_name, columns, constraints):
     column_defs = []
     primary_keys = []
-    
+    unique_constraints = []
+
     for column in columns:
         col_name = column[0]
         data_type = map_analytics_db_to_postgres(column[1])
-        nullable = '' if column[3] == 'NO' else 'NULL'
-        column_defs.append(f"{col_name} {data_type} {nullable}")
-        
+        nullable = 'NOT NULL' if column[3] == 'NO' else ''  # Only append NOT NULL if applicable
+        column_defs.append(f"{col_name} {data_type} {nullable}".strip())  # Strip to avoid extra spaces
+    
     for constraint in constraints:
         constraint_name = constraint[0]
         constraint_type = constraint[1]
         if constraint_type == 'PRIMARY KEY':
-            primary_keys.append('ID')  # Replace 'constraint_name' with 'ID' column here
-    
+            primary_keys.append(constraint_name)  # Use actual constraint name for primary key
+        elif constraint_type == 'UNIQUE':
+            unique_constraints.append(constraint_name)  # Handle unique constraints as needed
+
     if primary_keys:
         column_defs.append(f"PRIMARY KEY ({', '.join(primary_keys)})")
-    
+
+    if unique_constraints:
+        for unique_col in unique_constraints:
+            column_defs.append(f"UNIQUE ({unique_col})")  # Add unique constraints as necessary
+
     all_defs = column_defs
     create_query = f"""
     DO $$
@@ -135,16 +179,17 @@ def create_table_query(table_name, columns, constraints):
 def backup_analytics_to_postgres(tables=None, sample_size=None):
     try:
         logging.info("Starting backup operation from New Source DB to PostgreSQL.")
-
+        
+        # Environment variable extraction
         analytics_db_driver = os.getenv('ECOLLISION_ANALYTICS_SQL_DRIVER')
         analytics_db_server = os.getenv('ECOLLISION_ANALYTICS_SQL_SERVER').replace('\\\\', '\\')
         analytics_db_name = os.getenv('ECOLLISION_ANALYTICS_SQL_DATABASE_NAME')
         analytics_db_trusted_connection = os.getenv('ECOLLISION_ANALYTICS_SQL_TRUSTED_CONNECTION')
-
-        # Initialize NewSourceDB with connection details
+        
+        # Initialize NewSourceDB
         analytics_db = AnalyticsDB(analytics_db_name, analytics_db_server, analytics_db_driver, analytics_db_trusted_connection)
-
-        # Connect to PostgreSQL (replace with your PostgreSQL connection details)
+        
+        # Connect to PostgreSQL
         postgres_host = os.getenv('ECOLLISION_FUSION_SQL_HOST_NAME')
         postgres_db_name = os.getenv('ECOLLISION_FUSION_SQL_DATABASE_NAME')
         postgres_user = os.getenv('ECOLLISION_FUSION_SQL_USERNAME')
@@ -153,21 +198,21 @@ def backup_analytics_to_postgres(tables=None, sample_size=None):
         postgres_db = PostgreSQLDB(postgres_user, postgres_password, postgres_host, postgres_db_name)
 
         if tables is None:
-            # Query to get all tables for the new database
             new_db_tables_query = """
             SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'
             """
             headers, tables = analytics_db.query_without_param(new_db_tables_query)
 
+        if not tables:
+            logging.warning("No tables found in the New Source DB.")
+            return
+
         for table in tables:
             table_name = table if isinstance(table, str) else table[0]
-
-            # Get column metadata and constraints
             columns = analytics_db.get_table_columns(table_name)
             constraints = analytics_db.get_constraints(table_name)
-
-            # Construct PostgreSQL table creation query
             create_query = create_table_query(table_name, columns, constraints)
+
             try:
                 postgres_db.execute_query(create_query)
             except Exception as e:
@@ -176,17 +221,16 @@ def backup_analytics_to_postgres(tables=None, sample_size=None):
                 else:
                     logging.error(f"Error creating table {table_name}: {e}")
                     continue
-
-            # Get data from New DB table
-            if sample_size is not None:
-                data_query = f"SELECT * FROM {table_name} LIMIT {sample_size}"  # Sample data
-            else:
-                data_query = f"SELECT * FROM {table_name}"  # Full data
-
+            
+            # Construct data fetching query
+            data_query = f"SELECT * FROM {table_name} LIMIT {sample_size}" if sample_size else f"SELECT * FROM {table_name}"
             logging.debug(f"Fetching data from New Source DB table: {table_name}")
             _, data = analytics_db.query_without_param(data_query)
 
-            # Insert data into PostgreSQL table
+            if not data:
+                logging.warning(f"No data found in table: {table_name}")
+                continue
+            
             prefixed_table_name = f"analytics_{table_name}"
             insert_query = f"INSERT INTO {prefixed_table_name} ({', '.join([col[0] for col in columns])}) VALUES ({', '.join(['%s'] * len(columns))})"
             
@@ -196,16 +240,19 @@ def backup_analytics_to_postgres(tables=None, sample_size=None):
                 except Exception as e:
                     logging.error(f"Error inserting row into {prefixed_table_name}: {row}. Error: {e}")
 
-        # Close connections
-        analytics_db.close_connection()
-        postgres_db.close_connection()
-        logging.info("Backup operation completed successfully.")
-    
     except Exception as e:
         logging.error(f"Backup operation failed: {e}")
+    
+    finally:
+        # Ensure connections are closed in case of an error
+        if 'analytics_db' in locals():
+            analytics_db.close_connection()
+        if 'postgres_db' in locals():
+            postgres_db.close_connection()
+        logging.info("Backup operation completed successfully.")
 
 if __name__ == "__main__":
     # Specify the tables to backup, or set to None to backup all tables
     tables_to_backup = ['COLLISIONS']  # Change this to a list of table names to specify
     
-    backup_analytics_to_postgres(tables=tables_to_backup, sample_size=125)  # Specify sample size or None for full data
+    backup_analytics_to_postgres(tables=tables_to_backup, sample_size=2)  # Specify sample size or None for full data
