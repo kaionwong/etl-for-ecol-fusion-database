@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 import os
 import logging
 
+from reference import ecollision_analytics_db_table_primary_key 
+
 # Set up logging configuration
 logging.basicConfig(level=logging.DEBUG, 
                     format='%(asctime)s - %(levelname)s - %(message)s')
@@ -147,40 +149,93 @@ def map_analytics_db_to_postgres(data_type):
     logging.debug(f"Mapping MS SQL Server type '{data_type}' to PostgreSQL type '{pg_type}'")
     return pg_type
 
+# def create_table_query(table_name, columns, constraints):
+#     # Prefix the table name with 'analytics_'
+#     prefixed_table_name = f"analytics_{table_name}"
+#     column_defs = []
+#     primary_keys = []
+#     unique_constraints = []
+
+#     for column in columns:
+#         col_name = column[0]
+#         data_type = map_analytics_db_to_postgres(column[1])
+#         nullable = 'NOT NULL' if column[3] == 'NO' else ''  # Only append NOT NULL if applicable
+#         column_defs.append(f"{col_name} {data_type} {nullable}".strip())  # Strip to avoid extra spaces
+    
+#     for constraint in constraints:
+#         constraint_name = constraint[0]
+#         constraint_type = constraint[1]
+#         if constraint_type == 'PRIMARY KEY':
+#             primary_keys.append(constraint_name)  # Use actual constraint name for primary key
+#         elif constraint_type == 'UNIQUE':
+#             unique_constraints.append(constraint_name)  # Handle unique constraints as needed
+
+#     if primary_keys:
+#         column_defs.append(f"PRIMARY KEY ({', '.join(primary_keys)})")
+
+#     if unique_constraints:
+#         for unique_col in unique_constraints:
+#             column_defs.append(f"UNIQUE ({unique_col})")  # Add unique constraints as necessary
+
+#     all_defs = column_defs
+#     create_query = f"""
+#     DO $$
+#     BEGIN
+#         IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '{prefixed_table_name.lower()}') THEN
+#             CREATE TABLE {prefixed_table_name} ({', '.join(all_defs)});
+#         END IF;
+#     END $$;
+#     """
+    
+#     logging.debug(f"Generated CREATE TABLE query for {prefixed_table_name}: {create_query}")
+#     return create_query
+
+# def create_table_query(table_name, columns, constraints):
+#     # Prefix the table name with 'analytics_'
+#     prefixed_table_name = f"analytics_{table_name}"
+#     column_defs = []
+
+#     for column in columns:
+#         col_name = column[0]
+#         data_type = map_analytics_db_to_postgres(column[1])
+#         nullable = 'NOT NULL' if column[3] == 'NO' else ''  # Only append NOT NULL if applicable
+#         column_defs.append(f"{col_name} {data_type} {nullable}".strip())  # Strip to avoid extra spaces
+
+#     # Constraints such as primary key or unique constraints are omitted here
+    
+#     create_query = f"""
+#     DO $$
+#     BEGIN
+#         IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '{prefixed_table_name.lower()}') THEN
+#             CREATE TABLE {prefixed_table_name} ({', '.join(column_defs)});
+#         END IF;
+#     END $$;
+#     """
+    
+#     logging.debug(f"Generated CREATE TABLE query for {prefixed_table_name}: {create_query}")
+#     return create_query
+
 def create_table_query(table_name, columns, constraints):
     # Prefix the table name with 'analytics_'
     prefixed_table_name = f"analytics_{table_name}"
     column_defs = []
-    primary_keys = []
-    unique_constraints = []
+    primary_key_column = ecollision_analytics_db_table_primary_key.get(table_name)
 
     for column in columns:
         col_name = column[0]
         data_type = map_analytics_db_to_postgres(column[1])
         nullable = 'NOT NULL' if column[3] == 'NO' else ''  # Only append NOT NULL if applicable
         column_defs.append(f"{col_name} {data_type} {nullable}".strip())  # Strip to avoid extra spaces
-    
-    for constraint in constraints:
-        constraint_name = constraint[0]
-        constraint_type = constraint[1]
-        if constraint_type == 'PRIMARY KEY':
-            primary_keys.append(constraint_name)  # Use actual constraint name for primary key
-        elif constraint_type == 'UNIQUE':
-            unique_constraints.append(constraint_name)  # Handle unique constraints as needed
 
-    if primary_keys:
-        column_defs.append(f"PRIMARY KEY ({', '.join(primary_keys)})")
+    # Add primary key constraint if available
+    if primary_key_column:
+        column_defs.append(f"PRIMARY KEY ({primary_key_column})")
 
-    if unique_constraints:
-        for unique_col in unique_constraints:
-            column_defs.append(f"UNIQUE ({unique_col})")  # Add unique constraints as necessary
-
-    all_defs = column_defs
     create_query = f"""
     DO $$
     BEGIN
         IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '{prefixed_table_name.lower()}') THEN
-            CREATE TABLE {prefixed_table_name} ({', '.join(all_defs)});
+            CREATE TABLE {prefixed_table_name} ({', '.join(column_defs)});
         END IF;
     END $$;
     """
@@ -257,8 +312,12 @@ def backup_analytics_to_postgres(tables=None, sample_size=None):
         logging.error(f"An error occurred during the backup process: {e}")
 
 if __name__ == "__main__":
-    tables_to_backup = ['COLLISIONS', 'CL_OBJECTS', 'CLOBJ_PARTY_INFO', 'CLOBJ_PROPERTY_INFO', 'ECR_COLL_PLOTTING_INFO',
-                        'CODE_TYPE_VALUES', 'CODE_TYPES', 'CL_STATUS_HISTORY', 'ECR_SYNCHRONIZATION_ACTION_ETL',
-                        'ECR_SYNCHRONIZATION_ACTION_LOG_ETL']  # Change this to a list of table names to specify, e.g., ['COLLISIONS']
+    # tables_to_backup = ['COLLISIONS', 'CL_OBJECTS', 'CLOBJ_PARTY_INFO', 'CLOBJ_PROPERTY_INFO', 'ECR_COLL_PLOTTING_INFO',
+    #                     'CODE_TYPE_VALUES', 'CODE_TYPES', 'CL_STATUS_HISTORY', 'ECR_SYNCHRONIZATION_ACTION_ETL',
+    #                     'ECR_SYNCHRONIZATION_ACTION_LOG_ETL']  # Change this to a list of table names to specify, e.g., ['COLLISIONS']
     
-    backup_analytics_to_postgres(tables=tables_to_backup, sample_size=100)
+    # tables_to_backup = ['CODE_TYPES']
+    
+    tables_to_backup = ['COLLISIONS', 'CODE_TYPES']
+    
+    backup_analytics_to_postgres(tables=tables_to_backup, sample_size=15)
