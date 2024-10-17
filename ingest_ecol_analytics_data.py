@@ -3,6 +3,7 @@
 # todo: some tables aren't populating (likely due to PK issues)
 
 import psycopg2
+import psycopg2.extras
 import pyodbc
 import pandas as pd
 from dotenv import load_dotenv
@@ -12,7 +13,7 @@ import logging
 from reference import ecollision_analytics_db_table_primary_key 
 
 # Set up logging configuration
-logging.basicConfig(level=logging.DEBUG, 
+logging.basicConfig(level=logging.CRITICAL, 
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 load_dotenv()
@@ -29,7 +30,6 @@ class AnalyticsDB:
         self.conn = pyodbc.connect(self.conn_str)
 
     def query_without_param(self, query):
-
         logging.debug(f"Executing query: {query}")
         cursor = self.conn.cursor()
         result = cursor.execute(query).fetchall()
@@ -95,6 +95,21 @@ class PostgreSQLDB:
         finally:
             cursor.close()
 
+    def batch_insert(self, query, data_batch):
+        cursor = self.conn.cursor()
+        try:
+            logging.debug(f"Executing batch insert with {len(data_batch)} rows.")
+            psycopg2.extras.execute_batch(cursor, query, data_batch)
+            self.conn.commit()
+            logging.debug(f"Batch insert committed successfully with {len(data_batch)} rows.")
+        except Exception as e:
+            logging.error(f"Batch insert failed. Error: {e}")
+            self.conn.rollback()
+            logging.debug("Transaction rolled back due to error in batch insert.")
+            raise
+        finally:
+            cursor.close()
+
     def close_connection(self):
         logging.debug("Closing PostgreSQL DB connection.")
         self.conn.close()
@@ -149,72 +164,6 @@ def map_analytics_db_to_postgres(data_type):
     logging.debug(f"Mapping MS SQL Server type '{data_type}' to PostgreSQL type '{pg_type}'")
     return pg_type
 
-# def create_table_query(table_name, columns, constraints):
-#     # Prefix the table name with 'analytics_'
-#     prefixed_table_name = f"analytics_{table_name}"
-#     column_defs = []
-#     primary_keys = []
-#     unique_constraints = []
-
-#     for column in columns:
-#         col_name = column[0]
-#         data_type = map_analytics_db_to_postgres(column[1])
-#         nullable = 'NOT NULL' if column[3] == 'NO' else ''  # Only append NOT NULL if applicable
-#         column_defs.append(f"{col_name} {data_type} {nullable}".strip())  # Strip to avoid extra spaces
-    
-#     for constraint in constraints:
-#         constraint_name = constraint[0]
-#         constraint_type = constraint[1]
-#         if constraint_type == 'PRIMARY KEY':
-#             primary_keys.append(constraint_name)  # Use actual constraint name for primary key
-#         elif constraint_type == 'UNIQUE':
-#             unique_constraints.append(constraint_name)  # Handle unique constraints as needed
-
-#     if primary_keys:
-#         column_defs.append(f"PRIMARY KEY ({', '.join(primary_keys)})")
-
-#     if unique_constraints:
-#         for unique_col in unique_constraints:
-#             column_defs.append(f"UNIQUE ({unique_col})")  # Add unique constraints as necessary
-
-#     all_defs = column_defs
-#     create_query = f"""
-#     DO $$
-#     BEGIN
-#         IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '{prefixed_table_name.lower()}') THEN
-#             CREATE TABLE {prefixed_table_name} ({', '.join(all_defs)});
-#         END IF;
-#     END $$;
-#     """
-    
-#     logging.debug(f"Generated CREATE TABLE query for {prefixed_table_name}: {create_query}")
-#     return create_query
-
-# def create_table_query(table_name, columns, constraints):
-#     # Prefix the table name with 'analytics_'
-#     prefixed_table_name = f"analytics_{table_name}"
-#     column_defs = []
-
-#     for column in columns:
-#         col_name = column[0]
-#         data_type = map_analytics_db_to_postgres(column[1])
-#         nullable = 'NOT NULL' if column[3] == 'NO' else ''  # Only append NOT NULL if applicable
-#         column_defs.append(f"{col_name} {data_type} {nullable}".strip())  # Strip to avoid extra spaces
-
-#     # Constraints such as primary key or unique constraints are omitted here
-    
-#     create_query = f"""
-#     DO $$
-#     BEGIN
-#         IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '{prefixed_table_name.lower()}') THEN
-#             CREATE TABLE {prefixed_table_name} ({', '.join(column_defs)});
-#         END IF;
-#     END $$;
-#     """
-    
-#     logging.debug(f"Generated CREATE TABLE query for {prefixed_table_name}: {create_query}")
-#     return create_query
-
 def create_table_query(table_name, columns, constraints):
     # Prefix the table name with 'analytics_'
     prefixed_table_name = f"analytics_{table_name}"
@@ -243,7 +192,7 @@ def create_table_query(table_name, columns, constraints):
     logging.debug(f"Generated CREATE TABLE query for {prefixed_table_name}: {create_query}")
     return create_query
 
-def backup_analytics_to_postgres(tables=None, sample_size=None):
+def backup_analytics_to_postgres(tables=None, sample_size=None, batch_size=100):
     try:
         logging.info("Starting backup operation from eCollision AnalyticsDB to PostgreSQL.")
         
@@ -290,17 +239,31 @@ def backup_analytics_to_postgres(tables=None, sample_size=None):
                 logging.error(f"Failed to create table {table_name}: {e}")
                 continue
 
-            select_query = f"SELECT TOP {sample_size} * FROM [eCollisionAnalytics].[ECRDBA].{table_name}" if sample_size else f"SELECT * FROM {table_name}"
+            select_query = f"SELECT TOP {sample_size} * FROM [eCollisionAnalytics].[ECRDBA].{table_name}" if sample_size else f"SELECT * FROM [eCollisionAnalytics].[ECRDBA].{table_name}"
+            
             logging.debug(f"Selecting data from {table_name}. Query: {select_query}")
             header, data = analytics_db.query_without_param(select_query)
 
-            for row in data:
-                insert_query = f"INSERT INTO analytics_{table_name} ({', '.join(header)}) VALUES ({', '.join(['%s'] * len(row))})"
-                logging.debug(f"Inserting data into {table_name}: {row}")
+            insert_query = f"INSERT INTO analytics_{table_name} ({', '.join(header)}) VALUES ({', '.join(['%s'] * len(header))})"
+            
+            batch = []
+            for i, row in enumerate(data):
+                batch.append(row)
+                if len(batch) == batch_size:
+                    try:
+                        logging.debug(f"Inserting batch of {batch_size} rows into {table_name}.")
+                        postgres_db.batch_insert(insert_query, batch)
+                    except Exception as e:
+                        logging.error(f"Failed to insert batch into {table_name}. Error: {e}")
+                    batch = []
+
+            # Insert remaining rows in the last batch if not empty
+            if batch:
                 try:
-                    postgres_db.execute_query(insert_query, row)
+                    logging.debug(f"Inserting final batch of {len(batch)} rows into {table_name}.")
+                    postgres_db.batch_insert(insert_query, batch)
                 except Exception as e:
-                    logging.error(f"Failed to insert row into {table_name}: {row}. Error: {e}")
+                    logging.error(f"Failed to insert final batch into {table_name}. Error: {e}")
 
         # Closing connections
         logging.debug("Closing database connections.")
@@ -318,6 +281,7 @@ if __name__ == "__main__":
     
     # tables_to_backup = ['CODE_TYPES']
     
-    tables_to_backup = ['COLLISIONS', 'CODE_TYPES']
-    
-    backup_analytics_to_postgres(tables=tables_to_backup, sample_size=15)
+    tables_to_backup = ['COLLISIONS', 'CL_OBJECTS']
+    sample_size = 5000
+    batch_size = 100
+    backup_analytics_to_postgres(tables=tables_to_backup, sample_size=sample_size, batch_size=batch_size)
