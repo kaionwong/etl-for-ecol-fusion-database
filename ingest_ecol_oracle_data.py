@@ -6,7 +6,7 @@ import psycopg2
 import logging
 
 # Set up logging configuration
-logging.basicConfig(level=logging.DEBUG, 
+logging.basicConfig(level=logging.CRITICAL, 
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 load_dotenv()
@@ -190,7 +190,7 @@ def create_table_query(table_name, columns, constraints):
     logging.debug(f"Create table query for {prefixed_table_name}: {create_query}")
     return create_query
 
-def backup_oracle_to_postgres(tables=None, sample_size=None):
+def backup_oracle_to_postgres(tables=None, sample_size=None, drop_existing=False):
     try:
         logging.info("Starting backup operation from Oracle to PostgreSQL.")
         
@@ -202,7 +202,7 @@ def backup_oracle_to_postgres(tables=None, sample_size=None):
 
         # Initialize OracleDB with connection details
         oracle_db = OracleDB(
-            oracle_username, oracle_password,oracle_host, oracle_port, oracle_service
+            oracle_username, oracle_password, oracle_host, oracle_port, oracle_service
         )
         
         # Connect to PostgreSQL (replace with your PostgreSQL connection details)
@@ -235,7 +235,15 @@ def backup_oracle_to_postgres(tables=None, sample_size=None):
 
             # Construct PostgreSQL table creation query
             create_query = create_table_query(table_name, columns, constraints)
-            
+
+            prefixed_table_name = f"oracle_{table_name}"
+
+            # Drop the existing table if the option is set
+            if drop_existing:
+                drop_query = f"DROP TABLE IF EXISTS {prefixed_table_name} CASCADE"
+                logging.info(f"Dropping existing table {prefixed_table_name} in PostgreSQL.")
+                postgres_db.execute_query(drop_query)
+
             # Create table in PostgreSQL
             logging.info(f"Creating table {table_name} in PostgreSQL.")
             postgres_db.execute_query(create_query)
@@ -250,7 +258,6 @@ def backup_oracle_to_postgres(tables=None, sample_size=None):
             _, data = oracle_db.query_without_param(data_query)
 
             # Insert data into PostgreSQL table
-            prefixed_table_name = f"oracle_{table_name}"
             insert_query = f"INSERT INTO {prefixed_table_name} ({', '.join([col[0] for col in columns])}) VALUES ({', '.join(['%s'] * len(columns))})"
             
             for row in data:
@@ -275,6 +282,6 @@ if __name__ == "__main__":
     #                     'CODE_TYPE_VALUES', 'CODE_TYPES', 'CL_STATUS_HISTORY', 'ECR_SYNCHRONIZATION_ACTION',
     #                     'ECR_SYNCHRONIZATION_ACTION_LOG']  # Change this to a list of table names to specify, e.g., ['COLLISIONS']
     
-    tables_to_backup = ['COLLISIONS', 'CL_OBJECTS', 'CLOBJ_PARTY_INFO']  # Change this to a list of table names to specify, e.g., ['COLLISIONS']
+    tables_to_backup = ['COLLISIONS']  # Change this to a list of table names to specify, e.g., ['COLLISIONS']
     
-    backup_oracle_to_postgres(tables=tables_to_backup, sample_size=122)  # Specify sample size or None for full data
+    backup_oracle_to_postgres(tables=tables_to_backup, sample_size=1, drop_existing=True)  # Specify sample size or None for full data

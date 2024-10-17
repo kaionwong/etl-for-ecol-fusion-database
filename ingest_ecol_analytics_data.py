@@ -282,6 +282,7 @@ if __name__ == "__main__":
     # tables_to_backup = ['CODE_TYPES']
     
     tables_to_backup = ['COLLISIONS', 'CL_OBJECTS']
-    sample_size = 5000
-    batch_size = 100
+    sample_size = None
+    batch_size = 5000
+    
     backup_analytics_to_postgres(tables=tables_to_backup, sample_size=sample_size, batch_size=batch_size)
