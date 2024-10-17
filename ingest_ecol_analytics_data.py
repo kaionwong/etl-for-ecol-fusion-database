@@ -11,6 +11,7 @@ import os
 import logging
 
 from reference import ecollision_analytics_db_table_primary_key 
+from helper import time_execution
 
 # Set up logging configuration
 logging.basicConfig(level=logging.CRITICAL, 
@@ -192,6 +193,7 @@ def create_table_query(table_name, columns, constraints):
     logging.debug(f"Generated CREATE TABLE query for {prefixed_table_name}: {create_query}")
     return create_query
 
+@time_execution
 def backup_analytics_to_postgres(tables=None, sample_size=None, batch_size=100):
     try:
         logging.info("Starting backup operation from eCollision AnalyticsDB to PostgreSQL.")

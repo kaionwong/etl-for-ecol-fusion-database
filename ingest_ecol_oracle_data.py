@@ -5,8 +5,10 @@ import os
 import psycopg2
 import logging
 
+from helper import time_execution
+
 # Set up logging configuration
-logging.basicConfig(level=logging.CRITICAL, 
+logging.basicConfig(level=logging.ERROR, 
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 load_dotenv()
@@ -100,20 +102,6 @@ class PostgreSQLDB:
         logging.debug("Closing PostgreSQL DB connection.")
         self.conn.close()
 
-# def map_oracle_to_postgres(data_type):
-#     """ Map Oracle data types to PostgreSQL data types """
-#     mapping = {
-#         'VARCHAR2': 'VARCHAR',
-#         'NUMBER': 'NUMERIC',
-#         'DATE': 'TIMESTAMP',
-#         'CHAR': 'CHAR',
-#         'FLOAT': 'DOUBLE PRECISION',
-#         # Add more mappings as needed
-#     }
-#     pg_type = mapping.get(data_type, 'TEXT')  # Default to TEXT if type not found
-#     logging.debug(f"Mapping Oracle type '{data_type}' to PostgreSQL type '{pg_type}'")
-#     return pg_type
-
 def map_oracle_to_postgres(data_type):
     """ Map Oracle data types to PostgreSQL data types """
     mapping = {
@@ -190,6 +178,7 @@ def create_table_query(table_name, columns, constraints):
     logging.debug(f"Create table query for {prefixed_table_name}: {create_query}")
     return create_query
 
+@time_execution
 def backup_oracle_to_postgres(tables=None, sample_size=None, drop_existing=False):
     try:
         logging.info("Starting backup operation from Oracle to PostgreSQL.")
@@ -284,4 +273,4 @@ if __name__ == "__main__":
     
     tables_to_backup = ['COLLISIONS']  # Change this to a list of table names to specify, e.g., ['COLLISIONS']
     
-    backup_oracle_to_postgres(tables=tables_to_backup, sample_size=1, drop_existing=True)  # Specify sample size or None for full data
+    backup_oracle_to_postgres(tables=tables_to_backup, sample_size=None, drop_existing=True)  # Specify sample size or None for full data
