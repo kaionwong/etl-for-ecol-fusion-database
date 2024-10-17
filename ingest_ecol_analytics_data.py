@@ -194,7 +194,7 @@ def create_table_query(table_name, columns, constraints):
     return create_query
 
 @time_execution
-def backup_analytics_to_postgres(tables=None, sample_size=None, batch_size=100):
+def backup_analytics_to_postgres(tables=None, sample_size=None, batch_size=100, drop_existing=False):
     try:
         logging.info("Starting backup operation from eCollision AnalyticsDB to PostgreSQL.")
         
@@ -230,6 +230,17 @@ def backup_analytics_to_postgres(tables=None, sample_size=None, batch_size=100):
         for table in tables:
             table_name = table if isinstance(table, str) else table[0]
             logging.debug(f"Processing table: {table_name}")
+            
+            # Drop existing table if the option is enabled
+            if drop_existing:
+                drop_query = f"DROP TABLE IF EXISTS analytics_{table_name} CASCADE;"
+                try:
+                    logging.debug(f"Dropping existing table: {table_name}")
+                    postgres_db.execute_query(drop_query)
+                except Exception as e:
+                    logging.error(f"Failed to drop table {table_name}: {e}")
+                    continue
+            
             columns = analytics_db.get_table_columns(table_name)
             constraints = analytics_db.get_constraints(table_name)
             create_query = create_table_query(table_name, columns, constraints)
@@ -287,4 +298,4 @@ if __name__ == "__main__":
     sample_size = None
     batch_size = 5000
     
-    backup_analytics_to_postgres(tables=tables_to_backup, sample_size=sample_size, batch_size=batch_size)
+    backup_analytics_to_postgres(tables=tables_to_backup, sample_size=sample_size, batch_size=batch_size, drop_existing=True)
