@@ -294,8 +294,8 @@ if __name__ == "__main__":
     
     # tables_to_backup = ['CODE_TYPES']
     
-    tables_to_backup = ['COLLISIONS', 'CL_OBJECTS']
+    tables_to_backup = ['CL_STATUS_HISTORY', 'ECR_SYNCHRONIZATION_ACTION_ETL', 'ECR_SYNCHRONIZATION_ACTION_LOG_ETL']
     sample_size = None
-    batch_size = 5000
+    batch_size = 500
     
     backup_analytics_to_postgres(tables=tables_to_backup, sample_size=sample_size, batch_size=batch_size, drop_existing=True)
