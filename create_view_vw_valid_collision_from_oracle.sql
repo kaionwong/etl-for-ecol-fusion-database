@@ -1,3 +1,4 @@
+CREATE OR REPLACE VIEW vw_valid_collision_from_oracle AS
 WITH CollisionCutoffDates AS (
     -- CTE that defines cutoff dates for each created year. 
     -- Each record specifies a year and the corresponding maximum date until which collisions are considered valid.
@@ -137,8 +138,8 @@ CollisionStatusOnCutoffFilteredThrice AS (
 --- Option 2 ---
 
 SELECT
-    c.case_nbr
-    -- ,csoc.collision_id
+    csoc.collision_id
+    ,c.case_nbr
     -- ,csoc.created_year
     -- ,EXTRACT(YEAR FROM c.occurence_timestamp) AS case_year
     -- ,csoc.cutoff_end_date
@@ -152,10 +153,11 @@ FROM
     LEFT JOIN public.oracle_collisions c ON csoc.collision_id = c.id
 WHERE 1=1
     AND (csoc.coll_status_type_id = 220 OR csoc.coll_status_type_id = 221)  -- Check for valid status
-    --AND EXTRACT(YEAR FROM c.occurence_timestamp) = 2020  -- Filter by case year
-	AND c.case_nbr IS NOT NULL
+    --AND EXTRACT(YEAR FROM c.occurence_timestamp) <= 2015  -- Filter by case year
+    AND c.case_nbr IS NOT NULL
 ORDER BY
     c.case_nbr DESC;
 
 --- Option 2 ends ---
 ---------------------
+;
