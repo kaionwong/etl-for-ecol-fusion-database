@@ -128,6 +128,8 @@ CollisionStatusOnCutoffFilteredThrice AS (
 -- FROM
 --     CollisionStatusOnCutoffFilteredThrice csoc
 --     LEFT JOIN public.oracle_collisions c ON csoc.collision_id = c.id
+-- WHERE 1=1
+--     AND EXTRACT(YEAR FROM c.occurence_timestamp) <= 2015  -- Filter by case year
 -- ORDER BY
 --     csoc.collision_id;
 
@@ -140,20 +142,11 @@ CollisionStatusOnCutoffFilteredThrice AS (
 SELECT
     csoc.collision_id
     ,c.case_nbr
-    -- ,csoc.created_year
-    -- ,EXTRACT(YEAR FROM c.occurence_timestamp) AS case_year
-    -- ,csoc.cutoff_end_date
-    -- ,csoc.coll_status_type_id
-    -- ,csoc.effective_date
-    -- ,c.pfn_file_nbr
-    -- ,c.occurence_timestamp
-    -- ,c.reported_timestamp
 FROM
     CollisionStatusOnCutoffFilteredThrice csoc
     LEFT JOIN public.oracle_collisions c ON csoc.collision_id = c.id
 WHERE 1=1
     AND (csoc.coll_status_type_id = 220 OR csoc.coll_status_type_id = 221)  -- Check for valid status
-    --AND EXTRACT(YEAR FROM c.occurence_timestamp) <= 2015  -- Filter by case year
     AND c.case_nbr IS NOT NULL
 ORDER BY
     c.case_nbr DESC;
