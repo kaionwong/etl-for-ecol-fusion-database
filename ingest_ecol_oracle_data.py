@@ -71,6 +71,7 @@ class OracleDB:
 
 class PostgreSQLDB:
     def __init__(self, user, password, host, database):
+        
         self.conn = psycopg2.connect(
             host=host,
             database=database,
@@ -147,9 +148,10 @@ def map_oracle_to_postgres(data_type):
     logging.debug(f"Mapping Oracle type '{data_type}' to PostgreSQL type '{pg_type}'")
     return pg_type
 
-def create_table_query(table_name, columns, constraints):
-    """ Construct CREATE TABLE statement for PostgreSQL with a prefix."""
-    prefixed_table_name = f"oracle_{table_name}"
+def create_table_query(table_name, columns, constraints, dev_mode=False):
+    """ Construct CREATE TABLE statement for PostgreSQL with a dev prefix if dev_mode is True."""
+    # Apply prefix based on dev_mode
+    prefixed_table_name = f"{'oracle_' + table_name}_dev" if dev_mode else f"oracle_{table_name}"
     column_definitions = []
     primary_key_columns = []
 
@@ -179,22 +181,21 @@ def create_table_query(table_name, columns, constraints):
     return create_query
 
 @time_execution
-def backup_oracle_to_postgres(tables=None, sample_size=None, drop_existing=False):
+def backup_oracle_to_postgres(tables=None, sample_size=None, drop_existing=False, dev_mode=False):
     try:
         logging.info("Starting backup operation from Oracle to PostgreSQL.")
         
+        # Database connection setup
         oracle_username = os.getenv('ECOLLISION_ORACLE_SQL_USERNAME')
         oracle_password = os.getenv('ECOLLISION_ORACLE_SQL_PASSWORD')
         oracle_host = os.getenv('ECOLLISION_ORACLE_SQL_HOST_NAME')
         oracle_port = os.getenv('ECOLLISION_ORACLE_SQL_PORT')
         oracle_service = os.getenv('ECOLLISION_ORACLE_SQL_SERVICE_NAME')
 
-        # Initialize OracleDB with connection details
         oracle_db = OracleDB(
             oracle_username, oracle_password, oracle_host, oracle_port, oracle_service
         )
         
-        # Connect to PostgreSQL (replace with your PostgreSQL connection details)
         postgres_host = os.getenv('ECOLLISION_FUSION_SQL_HOST_NAME')
         postgres_db_name = os.getenv('ECOLLISION_FUSION_SQL_DATABASE_NAME')
         postgres_user = os.getenv('ECOLLISION_FUSION_SQL_USERNAME')
@@ -202,32 +203,21 @@ def backup_oracle_to_postgres(tables=None, sample_size=None, drop_existing=False
         
         postgres_db = PostgreSQLDB(postgres_user, postgres_password, postgres_host, postgres_db_name)
 
-        # If tables is None, get all tables from Oracle
+        # Default to all tables if none specified
         if tables is None:
-            oracle_tables_query = """
-            SELECT table_name FROM all_tables WHERE owner = 'ECRDBA'
-            """
-            # Get all tables from Oracle
+            oracle_tables_query = "SELECT table_name FROM all_tables WHERE owner = 'ECRDBA'"
             headers, tables = oracle_db.query_without_param(oracle_tables_query)
 
         for table in tables:
             table_name = table if isinstance(table, str) else table[0]
-
-            # Get the owner of the table
             owner = oracle_db.get_table_owner(table_name)
-
-            # Get column metadata from Oracle
             columns = oracle_db.get_table_columns(table_name)
-            
-            # Get constraints from Oracle
             constraints = oracle_db.get_constraints(table_name)
 
-            # Construct PostgreSQL table creation query
-            create_query = create_table_query(table_name, columns, constraints)
+            create_query = create_table_query(table_name, columns, constraints, dev_mode=dev_mode)
+            prefixed_table_name = f"{'oracle_' + table_name}_dev" if dev_mode else f"oracle_{table_name}"
 
-            prefixed_table_name = f"oracle_{table_name}"
-
-            # Drop the existing table if the option is set
+            # Drop existing table if needed
             if drop_existing:
                 drop_query = f"DROP TABLE IF EXISTS {prefixed_table_name} CASCADE"
                 logging.info(f"Dropping existing table {prefixed_table_name} in PostgreSQL.")
@@ -237,25 +227,17 @@ def backup_oracle_to_postgres(tables=None, sample_size=None, drop_existing=False
             logging.info(f"Creating table {table_name} in PostgreSQL.")
             postgres_db.execute_query(create_query)
 
-            # Get data from Oracle table
-            if sample_size is not None:
-                data_query = f"SELECT * FROM {owner}.{table_name} WHERE ROWNUM <= {sample_size}"  # Sample data
-            else:
-                data_query = f"SELECT * FROM {owner}.{table_name}"  # Full data
-
-            logging.debug(f"Fetching data from Oracle table: {table_name}")
+            # Fetch and insert data
+            data_query = f"SELECT * FROM {owner}.{table_name}" if sample_size is None else f"SELECT * FROM {owner}.{table_name} WHERE ROWNUM <= {sample_size}"
             _, data = oracle_db.query_without_param(data_query)
-
-            # Insert data into PostgreSQL table
             insert_query = f"INSERT INTO {prefixed_table_name} ({', '.join([col[0] for col in columns])}) VALUES ({', '.join(['%s'] * len(columns))})"
-            
+
             for row in data:
                 try:
                     postgres_db.execute_query(insert_query, row)
                 except Exception as e:
                     logging.error(f"Error inserting row into {prefixed_table_name}: {row}. Error: {e}")
 
-        # Close connections
         oracle_db.close_connection()
         postgres_db.close_connection()
         logging.info("Backup operation completed successfully.")
@@ -271,6 +253,12 @@ if __name__ == "__main__":
     #                     'CODE_TYPE_VALUES', 'CODE_TYPES', 'CL_STATUS_HISTORY', 'ECR_SYNCHRONIZATION_ACTION',
     #                     'ECR_SYNCHRONIZATION_ACTION_LOG']  # Change this to a list of table names to specify, e.g., ['COLLISIONS']
     
-    tables_to_backup = ['CL_STATUS_HISTORY', 'COLLISIONS']  # Change this to a list of table names to specify, e.g., ['COLLISIONS']
+    dev_mode = True  # Set dev_mode to True or False as needed
+    drop_existing=False
+    sample_size = 100
     
-    backup_oracle_to_postgres(tables=tables_to_backup, sample_size=None, drop_existing=True)  # Specify sample size or None for full data
+    tables_to_backup = ['COLLISIONS', 'CL_OBJECTS', 'CLOBJ_PARTY_INFO', 'CLOBJ_PROPERTY_INFO', 'ECR_COLL_PLOTTING_INFO',
+                        'CODE_TYPE_VALUES', 'CODE_TYPES', 'CL_STATUS_HISTORY', 'ECR_SYNCHRONIZATION_ACTION',
+                        'ECR_SYNCHRONIZATION_ACTION_LOG'] # Change this to a list of table names to specify, e.g., ['COLLISIONS']
+    
+    backup_oracle_to_postgres(tables=tables_to_backup, sample_size=sample_size, drop_existing=drop_existing, dev_mode=dev_mode)

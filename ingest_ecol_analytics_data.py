@@ -165,9 +165,10 @@ def map_analytics_db_to_postgres(data_type):
     logging.debug(f"Mapping MS SQL Server type '{data_type}' to PostgreSQL type '{pg_type}'")
     return pg_type
 
-def create_table_query(table_name, columns, constraints):
-    # Prefix the table name with 'analytics_'
-    prefixed_table_name = f"analytics_{table_name}"
+def create_table_query(table_name, columns, constraints, dev_mode=False):
+    # Prefix the table name with 'analytics_' and add '_dev' suffix if dev_mode is enabled
+    suffix = "_dev" if dev_mode else ""
+    prefixed_table_name = f"analytics_{table_name}{suffix}"
     column_defs = []
     primary_key_column = ecollision_analytics_db_table_primary_key.get(table_name)
 
@@ -194,7 +195,7 @@ def create_table_query(table_name, columns, constraints):
     return create_query
 
 @time_execution
-def backup_analytics_to_postgres(tables=None, sample_size=None, batch_size=100, drop_existing=False):
+def backup_analytics_to_postgres(tables=None, sample_size=None, batch_size=100, drop_existing=False, dev_mode=False):
     try:
         logging.info("Starting backup operation from eCollision AnalyticsDB to PostgreSQL.")
         
@@ -232,10 +233,12 @@ def backup_analytics_to_postgres(tables=None, sample_size=None, batch_size=100, 
             logging.debug(f"Processing table: {table_name}")
             
             # Drop existing table if the option is enabled
+            suffix = "_dev" if dev_mode else ""
+            prefixed_table_name = f"analytics_{table_name}{suffix}"
             if drop_existing:
-                drop_query = f"DROP TABLE IF EXISTS analytics_{table_name} CASCADE;"
+                drop_query = f"DROP TABLE IF EXISTS {prefixed_table_name} CASCADE;"
                 try:
-                    logging.debug(f"Dropping existing table: {table_name}")
+                    logging.debug(f"Dropping existing table: {prefixed_table_name}")
                     postgres_db.execute_query(drop_query)
                 except Exception as e:
                     logging.error(f"Failed to drop table {table_name}: {e}")
@@ -243,7 +246,7 @@ def backup_analytics_to_postgres(tables=None, sample_size=None, batch_size=100, 
             
             columns = analytics_db.get_table_columns(table_name)
             constraints = analytics_db.get_constraints(table_name)
-            create_query = create_table_query(table_name, columns, constraints)
+            create_query = create_table_query(table_name, columns, constraints, dev_mode=dev_mode)
 
             try:
                 logging.debug(f"Executing create table query for {table_name}.")
@@ -257,7 +260,7 @@ def backup_analytics_to_postgres(tables=None, sample_size=None, batch_size=100, 
             logging.debug(f"Selecting data from {table_name}. Query: {select_query}")
             header, data = analytics_db.query_without_param(select_query)
 
-            insert_query = f"INSERT INTO analytics_{table_name} ({', '.join(header)}) VALUES ({', '.join(['%s'] * len(header))})"
+            insert_query = f"INSERT INTO {prefixed_table_name} ({', '.join(header)}) VALUES ({', '.join(['%s'] * len(header))})"
             
             batch = []
             for i, row in enumerate(data):
@@ -286,7 +289,7 @@ def backup_analytics_to_postgres(tables=None, sample_size=None, batch_size=100, 
 
     except Exception as e:
         logging.error(f"An error occurred during the backup process: {e}")
-
+        
 if __name__ == "__main__":
     # tables_to_backup = ['COLLISIONS', 'CL_OBJECTS', 'CLOBJ_PARTY_INFO', 'CLOBJ_PROPERTY_INFO', 'ECR_COLL_PLOTTING_INFO',
     #                     'CODE_TYPE_VALUES', 'CODE_TYPES', 'CL_STATUS_HISTORY', 'ECR_SYNCHRONIZATION_ACTION_ETL',
@@ -294,8 +297,14 @@ if __name__ == "__main__":
     
     # tables_to_backup = ['CODE_TYPES']
     
-    tables_to_backup = ['CL_STATUS_HISTORY', 'ECR_SYNCHRONIZATION_ACTION_ETL', 'ECR_SYNCHRONIZATION_ACTION_LOG_ETL']
+    dev_mode = True
+    drop_existing = True
+    tables_to_backup = ['COLLISIONS', 'CL_OBJECTS', 'CLOBJ_PARTY_INFO', 'CLOBJ_PROPERTY_INFO', 'ECR_COLL_PLOTTING_INFO',
+                        'CODE_TYPE_VALUES', 'CODE_TYPES', 'CL_STATUS_HISTORY', 'ECR_SYNCHRONIZATION_ACTION_ETL',
+                        'ECR_SYNCHRONIZATION_ACTION_LOG_ETL']
     sample_size = None
-    batch_size = 500
+    batch_size = None
     
-    backup_analytics_to_postgres(tables=tables_to_backup, sample_size=sample_size, batch_size=batch_size, drop_existing=True)
+    # Enable dev_mode to use _dev table suffix
+    backup_analytics_to_postgres(tables=tables_to_backup, sample_size=sample_size, batch_size=batch_size, 
+                                 drop_existing=drop_existing, dev_mode=dev_mode)
