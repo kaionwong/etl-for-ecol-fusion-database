@@ -1,5 +1,6 @@
 - [x] ingesting/backing up database table from oracle to fusion
 - [x] manually check if the backup/import into fusion is accurate
+- [] confirm with Kari if entered highway plotting information will/will not be updated in Oracle (as for sure it is updated in Analytics)
 - [] add foreign key relationships between tables
 - [] ingest/backup eCollision analytics
 - [] ingest/backup mainframe data; with field name matching or remapping (to map the column name, format and constraints like analytics)
@@ -12,3 +13,4 @@ references
 - I built an E(T)L-pipeline in Python to transfer data from MS SQL Server to PostgreSQL
 = https://chris-so.medium.com/i-built-an-e-t-l-pipeline-in-python-to-transfer-data-from-ms-sql-server-to-postgresql-7da67a30b951
 Code along - build an ELT Pipeline in 1 Hour (dbt, Snowflake, Airflow) = https://www.youtube.com/watch?v=OLXkGB7krGo
+Orchestrating Data Pipelines With Snowpark dbt Python Models And Airflow = https://www.youtube.com/watch?v=bnRZL64airk
