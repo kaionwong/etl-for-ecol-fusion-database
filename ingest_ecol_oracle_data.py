@@ -253,10 +253,9 @@ if __name__ == "__main__":
     #                     'CODE_TYPE_VALUES', 'CODE_TYPES', 'CL_STATUS_HISTORY', 'ECR_SYNCHRONIZATION_ACTION',
     #                     'ECR_SYNCHRONIZATION_ACTION_LOG']  # Change this to a list of table names to specify, e.g., ['COLLISIONS']
     
-    dev_mode = True  # Set dev_mode to True or False as needed
-    drop_existing=False
-    sample_size = 100
-    
+    dev_mode = False  # Set dev_mode to True or False as needed
+    drop_existing = True
+    sample_size = None
     tables_to_backup = ['COLLISIONS', 'CL_OBJECTS', 'CLOBJ_PARTY_INFO', 'CLOBJ_PROPERTY_INFO', 'ECR_COLL_PLOTTING_INFO',
                         'CODE_TYPE_VALUES', 'CODE_TYPES', 'CL_STATUS_HISTORY', 'ECR_SYNCHRONIZATION_ACTION',
                         'ECR_SYNCHRONIZATION_ACTION_LOG'] # Change this to a list of table names to specify, e.g., ['COLLISIONS']
