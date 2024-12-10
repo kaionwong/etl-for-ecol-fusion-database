@@ -1,11 +1,11 @@
-import cx_Oracle
 import pandas as pd
 from dotenv import load_dotenv
 import os
-import psycopg2
+
 import logging
 
 from helper import time_execution
+from helper_db_operation import OracleDB, PostgreSQLDB
 
 # Set up logging configuration
 logging.basicConfig(level=logging.ERROR, 
@@ -13,95 +13,39 @@ logging.basicConfig(level=logging.ERROR,
 
 load_dotenv()
 
-class OracleDB:
-    def __init__(self, username, password, db_host, db_port, db_service):
-        # Oracle Instant Client setup
-        oracle_instant_client_dir = os.getenv('ORACLE_INSTANT_CLIENT_DIR')
-        cx_Oracle.init_oracle_client(lib_dir=oracle_instant_client_dir)
-
-        self.conn_str = f"{username}/{password}@//{db_host}:{db_port}/{db_service}"
-        logging.debug(f"Connecting to Oracle DB with connection string: {self.conn_str}")
-        self.conn = cx_Oracle.connect(self.conn_str)
-
-    def query_without_param(self, query):
-        logging.debug(f"Executing query: {query}")
-        cursor = self.conn.cursor()
-        result = cursor.execute(query).fetchall()
-        header = [i[0] for i in cursor.description]
-        cursor.close()
-        logging.debug(f"Query executed successfully, fetched {len(result)} rows.")
-        return header, result
-    
-    def close_connection(self):
-        logging.debug("Closing Oracle DB connection.")
-        self.conn.close()
-
-    def get_table_columns(self, table_name):
-        query = f"""
-        SELECT column_name, data_type, data_length, nullable
-        FROM all_tab_columns
-        WHERE table_name = '{table_name.upper()}'
-        AND owner = 'ECRDBA'
-        ORDER BY column_id
-        """
-        logging.debug(f"Executing query to get columns: {query}")
-        headers, columns = self.query_without_param(query)
-        logging.debug(f"Columns retrieved for {table_name}: {columns}")
-        return columns
-
-    def get_constraints(self, table_name):
-        query = f"""
-        SELECT constraint_name, constraint_type, r_constraint_name 
-        FROM user_constraints 
-        WHERE table_name = '{table_name.upper()}'
-        """
-        logging.debug(f"Getting constraints for table: {table_name}")
-        constraint = self.query_without_param(query)[1]
-        logging.debug(f"Constraint content: {constraint}")
-        return constraint
-
-    def get_table_owner(self, table_name):
-        query = f"""
-        SELECT owner 
-        FROM all_tables 
-        WHERE table_name = '{table_name.upper()}'
-        """
-        logging.debug(f"Getting owner for table: {table_name}")
-        return self.query_without_param(query)[1][0][0]  # Returns the owner
-
-class PostgreSQLDB:
-    def __init__(self, user, password, host, database):
+# class PostgreSQLDB:
+#     def __init__(self, user, password, host, database):
         
-        self.conn = psycopg2.connect(
-            host=host,
-            database=database,
-            user=user,
-            password=password
-        )
-        self.conn.autocommit = False  # Disable autocommit, we will handle transactions manually
-        logging.debug("Connected to PostgreSQL DB.")
+#         self.conn = psycopg2.connect(
+#             host=host,
+#             database=database,
+#             user=user,
+#             password=password
+#         )
+#         self.conn.autocommit = False  # Disable autocommit, we will handle transactions manually
+#         logging.debug("Connected to PostgreSQL DB.")
 
-    def execute_query(self, query, data=None):
-        cursor = self.conn.cursor()
-        try:
-            logging.debug(f"Executing query: {query} with data: {data}")
-            if data:
-                cursor.execute(query, data)
-            else:
-                cursor.execute(query)
-        except Exception as e:
-            logging.error(f"Error executing query: {query}. Error: {e}")
-            self.conn.rollback()  # Rollback the transaction on failure
-            raise  # Re-raise the exception after rollback
-        else:
-            self.conn.commit()  # Commit the transaction if no errors occur
-            logging.debug("Query executed and committed successfully.")
-        finally:
-            cursor.close()
+#     def execute_query(self, query, data=None):
+#         cursor = self.conn.cursor()
+#         try:
+#             logging.debug(f"Executing query: {query} with data: {data}")
+#             if data:
+#                 cursor.execute(query, data)
+#             else:
+#                 cursor.execute(query)
+#         except Exception as e:
+#             logging.error(f"Error executing query: {query}. Error: {e}")
+#             self.conn.rollback()  # Rollback the transaction on failure
+#             raise  # Re-raise the exception after rollback
+#         else:
+#             self.conn.commit()  # Commit the transaction if no errors occur
+#             logging.debug("Query executed and committed successfully.")
+#         finally:
+#             cursor.close()
 
-    def close_connection(self):
-        logging.debug("Closing PostgreSQL DB connection.")
-        self.conn.close()
+#     def close_connection(self):
+#         logging.debug("Closing PostgreSQL DB connection.")
+#         self.conn.close()
 
 def map_oracle_to_postgres(data_type):
     """ Map Oracle data types to PostgreSQL data types """

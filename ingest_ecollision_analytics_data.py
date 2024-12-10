@@ -1,10 +1,3 @@
-# todo: fix primary key column not imported properly
-# todo: ensure primary key is unique
-# todo: some tables aren't populating (likely due to PK issues)
-
-import psycopg2
-import psycopg2.extras
-import pyodbc
 import pandas as pd
 from dotenv import load_dotenv
 import os
@@ -12,108 +5,13 @@ import logging
 
 from reference import ecollision_analytics_db_table_primary_key 
 from helper import time_execution
+from helper_db_operation import AnalyticsDB, PostgreSQLDB
 
 # Set up logging configuration
 logging.basicConfig(level=logging.CRITICAL, 
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 load_dotenv()
-
-class AnalyticsDB:
-    def __init__(self, db_name, db_server, db_driver, db_trusted_connection):
-        self.conn_str = ''
-        self.conn_str += f'Driver={db_driver};'
-        self.conn_str += f'Server={db_server};'
-        self.conn_str += f'Database={db_name};'
-        self.conn_str += f'Trusted_Connection={db_trusted_connection};'
-        
-        logging.debug(f"Connecting to Analytics DB with connection string: {self.conn_str}")
-        self.conn = pyodbc.connect(self.conn_str)
-
-    def query_without_param(self, query):
-        logging.debug(f"Executing query: {query}")
-        cursor = self.conn.cursor()
-        result = cursor.execute(query).fetchall()
-        header = [i[0] for i in cursor.description]
-        cursor.close()
-        logging.debug(f"Query executed successfully, fetched {len(result)} rows.")
-        return header, result
-    
-    def close_connection(self):
-        logging.debug("Closing eCollision Analytics DB connection.")
-        self.conn.close()
-
-    def get_table_columns(self, table_name):
-        query = f"""
-        SELECT column_name, data_type, character_maximum_length, is_nullable
-        FROM information_schema.columns
-        WHERE table_name = '{table_name.lower()}'
-        """
-        logging.debug(f"Executing query to get columns for table: {table_name}. Query: {query}")
-        headers, columns = self.query_without_param(query)
-        logging.debug(f"Columns retrieved for {table_name}: {columns}")        
-        return columns
-
-    def get_constraints(self, table_name):
-        query = f"""
-        SELECT constraint_name, constraint_type
-        FROM information_schema.table_constraints
-        WHERE table_name = '{table_name.lower()}'
-        """
-        logging.debug(f"Getting constraints for table: {table_name}. Query: {query}")
-        constraints = self.query_without_param(query)[1]
-        logging.debug(f"Constraints retrieved for {table_name}: {constraints}")
-        return constraints
-
-class PostgreSQLDB:
-    def __init__(self, user, password, host, database):
-        logging.debug(f"Connecting to PostgreSQL DB at {host} with database: {database}")
-        self.conn = psycopg2.connect(
-            host=host,
-            database=database,
-            user=user,
-            password=password
-        )
-        self.conn.autocommit = False  # Disable autocommit, we will handle transactions manually
-        logging.debug("Connected to PostgreSQL DB.")
-
-    def execute_query(self, query, data=None):
-        cursor = self.conn.cursor()
-        try:
-            logging.debug(f"Executing query: {query} with data: {data}")
-            if data:
-                cursor.execute(query, data)
-            else:
-                cursor.execute(query)
-        except Exception as e:
-            logging.error(f"Error executing query: {query}. Error: {e}")
-            self.conn.rollback()  # Rollback the transaction on failure
-            logging.debug("Transaction rolled back due to error.")
-            raise  # Re-raise the exception after rollback
-        else:
-            self.conn.commit()  # Commit the transaction if no errors occur
-            logging.debug("Query executed and committed successfully.")
-        finally:
-            cursor.close()
-
-    def batch_insert(self, query, data_batch):
-        cursor = self.conn.cursor()
-        try:
-            logging.debug(f"Executing batch insert with {len(data_batch)} rows.")
-            psycopg2.extras.execute_batch(cursor, query, data_batch)
-            self.conn.commit()
-            logging.debug(f"Batch insert committed successfully with {len(data_batch)} rows.")
-        except Exception as e:
-            logging.error(f"Batch insert failed. Error: {e}")
-            self.conn.rollback()
-            logging.debug("Transaction rolled back due to error in batch insert.")
-            raise
-        finally:
-            cursor.close()
-
-    def close_connection(self):
-        logging.debug("Closing PostgreSQL DB connection.")
-        self.conn.close()
 
 def map_analytics_db_to_postgres(data_type):
     """ Map MS SQL Server types to PostgreSQL data types """
@@ -299,10 +197,11 @@ if __name__ == "__main__":
     
     dev_mode = True
     drop_existing = True
-    tables_to_backup = ['COLLISIONS', 'CL_OBJECTS', 'CLOBJ_PARTY_INFO', 'CLOBJ_PROPERTY_INFO', 'ECR_COLL_PLOTTING_INFO',
-                        'CODE_TYPE_VALUES', 'CODE_TYPES', 'CL_STATUS_HISTORY', 'ECR_SYNCHRONIZATION_ACTION_ETL',
-                        'ECR_SYNCHRONIZATION_ACTION_LOG_ETL']
-    sample_size = None
+    # tables_to_backup = ['COLLISIONS', 'CL_OBJECTS', 'CLOBJ_PARTY_INFO', 'CLOBJ_PROPERTY_INFO', 'ECR_COLL_PLOTTING_INFO',
+    #                     'CODE_TYPE_VALUES', 'CODE_TYPES', 'CL_STATUS_HISTORY', 'ECR_SYNCHRONIZATION_ACTION_ETL',
+    #                     'ECR_SYNCHRONIZATION_ACTION_LOG_ETL']
+    tables_to_backup = ['COLLISIONS']
+    sample_size = 10000
     batch_size = None
     
     # Enable dev_mode to use _dev table suffix
