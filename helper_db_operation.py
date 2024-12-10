@@ -1,3 +1,4 @@
+import os
 import psycopg2
 import cx_Oracle
 import psycopg2
@@ -156,3 +157,81 @@ class PostgreSQLDB:
     def close_connection(self):
         logging.debug("Closing PostgreSQL DB connection.")
         self.conn.close()
+
+def map_analytics_db_to_postgres(data_type):
+    """ Map MS SQL Server types to PostgreSQL data types """
+    mapping = {
+        'varchar': 'VARCHAR',
+        'nvarchar': 'VARCHAR',
+        'char': 'CHAR',
+        'nchar': 'CHAR',
+        'text': 'TEXT',
+        'ntext': 'TEXT',
+        'int': 'INTEGER',
+        'smallint': 'SMALLINT',
+        'tinyint': 'SMALLINT',
+        'bigint': 'BIGINT',
+        'decimal': 'DECIMAL',
+        'numeric': 'NUMERIC',
+        'float': 'DOUBLE PRECISION',
+        'real': 'REAL',
+        'datetime': 'TIMESTAMP',
+        'datetime2': 'TIMESTAMP',
+        'smalldatetime': 'TIMESTAMP',
+        'date': 'DATE',
+        'time': 'TIME',
+        'bit': 'BOOLEAN',
+        'binary': 'BYTEA',
+        'varbinary': 'BYTEA',
+        'image': 'BYTEA',
+        'uniqueidentifier': 'UUID',
+        'xml': 'XML',
+        'money': 'NUMERIC',
+        'smallmoney': 'NUMERIC',
+    }
+    return mapping.get(data_type.lower(), 'TEXT')
+
+def map_oracle_to_postgres(data_type):
+    """ Map Oracle data types to PostgreSQL data types """
+    mapping = {
+        # String types
+        'VARCHAR2': 'VARCHAR',
+        'NVARCHAR2': 'VARCHAR',            # Oracle NVARCHAR2 -> PostgreSQL VARCHAR
+        'CHAR': 'CHAR',
+        'NCHAR': 'CHAR',
+        'CLOB': 'TEXT',                    # Oracle CLOB -> PostgreSQL TEXT
+        'NCLOB': 'TEXT',                   # Oracle NCLOB -> PostgreSQL TEXT
+
+        # Numeric types
+        'NUMBER': 'NUMERIC',               # Oracle NUMBER -> PostgreSQL NUMERIC (with precision support)
+        'BINARY_FLOAT': 'REAL',            # Oracle BINARY_FLOAT -> PostgreSQL REAL
+        'BINARY_DOUBLE': 'DOUBLE PRECISION', # Oracle BINARY_DOUBLE -> PostgreSQL DOUBLE PRECISION
+        'FLOAT': 'DOUBLE PRECISION',
+        'INTEGER': 'INTEGER',
+        'SMALLINT': 'SMALLINT',
+        
+        # Date/Time types
+        'DATE': 'TIMESTAMP',               # Oracle DATE -> PostgreSQL TIMESTAMP
+        'TIMESTAMP': 'TIMESTAMP',          # Oracle TIMESTAMP -> PostgreSQL TIMESTAMP
+        'TIMESTAMP WITH TIME ZONE': 'TIMESTAMPTZ', # Oracle TIMESTAMP WITH TIME ZONE -> PostgreSQL TIMESTAMPTZ
+        'TIMESTAMP WITH LOCAL TIME ZONE': 'TIMESTAMPTZ', # Similar handling
+
+        # Boolean type
+        'BOOLEAN': 'BOOLEAN',              # PostgreSQL has native BOOLEAN support (Oracle does not)
+
+        # Binary types
+        'BLOB': 'BYTEA',                   # Oracle BLOB -> PostgreSQL BYTEA
+        'RAW': 'BYTEA',                    # Oracle RAW -> PostgreSQL BYTEA
+        'LONG RAW': 'BYTEA',               # Oracle LONG RAW -> PostgreSQL BYTEA
+
+        # Other types
+        'ROWID': 'TEXT',                   # Oracle ROWID -> PostgreSQL TEXT
+        'UROWID': 'TEXT',                  # Oracle UROWID -> PostgreSQL TEXT
+        'XMLTYPE': 'XML',                  # Oracle XMLTYPE -> PostgreSQL XML
+        'LONG': 'TEXT',                    # Oracle LONG -> PostgreSQL TEXT
+    }
+
+    # Default to TEXT if the type is not mapped
+    pg_type = mapping.get(data_type.upper(), 'TEXT')  
+    logging.debug(f"Mapping Oracle type '{data_type}' to PostgreSQL type '{pg_type}'")
+    return pg_type

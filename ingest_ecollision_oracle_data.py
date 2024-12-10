@@ -5,7 +5,7 @@ import os
 import logging
 
 from helper import time_execution
-from helper_db_operation import OracleDB, PostgreSQLDB
+from helper_db_operation import OracleDB, PostgreSQLDB, map_oracle_to_postgres
 
 # Set up logging configuration
 logging.basicConfig(level=logging.ERROR, 
@@ -47,52 +47,52 @@ load_dotenv()
 #         logging.debug("Closing PostgreSQL DB connection.")
 #         self.conn.close()
 
-def map_oracle_to_postgres(data_type):
-    """ Map Oracle data types to PostgreSQL data types """
-    mapping = {
-        # String types
-        'VARCHAR2': 'VARCHAR',
-        'NVARCHAR2': 'VARCHAR',            # Oracle NVARCHAR2 -> PostgreSQL VARCHAR
-        'CHAR': 'CHAR',
-        'NCHAR': 'CHAR',
-        'CLOB': 'TEXT',                    # Oracle CLOB -> PostgreSQL TEXT
-        'NCLOB': 'TEXT',                   # Oracle NCLOB -> PostgreSQL TEXT
+# def map_oracle_to_postgres(data_type):
+#     """ Map Oracle data types to PostgreSQL data types """
+#     mapping = {
+#         # String types
+#         'VARCHAR2': 'VARCHAR',
+#         'NVARCHAR2': 'VARCHAR',            # Oracle NVARCHAR2 -> PostgreSQL VARCHAR
+#         'CHAR': 'CHAR',
+#         'NCHAR': 'CHAR',
+#         'CLOB': 'TEXT',                    # Oracle CLOB -> PostgreSQL TEXT
+#         'NCLOB': 'TEXT',                   # Oracle NCLOB -> PostgreSQL TEXT
 
-        # Numeric types
-        'NUMBER': 'NUMERIC',               # Oracle NUMBER -> PostgreSQL NUMERIC (with precision support)
-        'BINARY_FLOAT': 'REAL',            # Oracle BINARY_FLOAT -> PostgreSQL REAL
-        'BINARY_DOUBLE': 'DOUBLE PRECISION', # Oracle BINARY_DOUBLE -> PostgreSQL DOUBLE PRECISION
-        'FLOAT': 'DOUBLE PRECISION',
-        'INTEGER': 'INTEGER',
-        'SMALLINT': 'SMALLINT',
+#         # Numeric types
+#         'NUMBER': 'NUMERIC',               # Oracle NUMBER -> PostgreSQL NUMERIC (with precision support)
+#         'BINARY_FLOAT': 'REAL',            # Oracle BINARY_FLOAT -> PostgreSQL REAL
+#         'BINARY_DOUBLE': 'DOUBLE PRECISION', # Oracle BINARY_DOUBLE -> PostgreSQL DOUBLE PRECISION
+#         'FLOAT': 'DOUBLE PRECISION',
+#         'INTEGER': 'INTEGER',
+#         'SMALLINT': 'SMALLINT',
         
-        # Date/Time types
-        'DATE': 'TIMESTAMP',               # Oracle DATE -> PostgreSQL TIMESTAMP
-        'TIMESTAMP': 'TIMESTAMP',          # Oracle TIMESTAMP -> PostgreSQL TIMESTAMP
-        'TIMESTAMP WITH TIME ZONE': 'TIMESTAMPTZ', # Oracle TIMESTAMP WITH TIME ZONE -> PostgreSQL TIMESTAMPTZ
-        'TIMESTAMP WITH LOCAL TIME ZONE': 'TIMESTAMPTZ', # Similar handling
+#         # Date/Time types
+#         'DATE': 'TIMESTAMP',               # Oracle DATE -> PostgreSQL TIMESTAMP
+#         'TIMESTAMP': 'TIMESTAMP',          # Oracle TIMESTAMP -> PostgreSQL TIMESTAMP
+#         'TIMESTAMP WITH TIME ZONE': 'TIMESTAMPTZ', # Oracle TIMESTAMP WITH TIME ZONE -> PostgreSQL TIMESTAMPTZ
+#         'TIMESTAMP WITH LOCAL TIME ZONE': 'TIMESTAMPTZ', # Similar handling
 
-        # Boolean type
-        'BOOLEAN': 'BOOLEAN',              # PostgreSQL has native BOOLEAN support (Oracle does not)
+#         # Boolean type
+#         'BOOLEAN': 'BOOLEAN',              # PostgreSQL has native BOOLEAN support (Oracle does not)
 
-        # Binary types
-        'BLOB': 'BYTEA',                   # Oracle BLOB -> PostgreSQL BYTEA
-        'RAW': 'BYTEA',                    # Oracle RAW -> PostgreSQL BYTEA
-        'LONG RAW': 'BYTEA',               # Oracle LONG RAW -> PostgreSQL BYTEA
+#         # Binary types
+#         'BLOB': 'BYTEA',                   # Oracle BLOB -> PostgreSQL BYTEA
+#         'RAW': 'BYTEA',                    # Oracle RAW -> PostgreSQL BYTEA
+#         'LONG RAW': 'BYTEA',               # Oracle LONG RAW -> PostgreSQL BYTEA
 
-        # Other types
-        'ROWID': 'TEXT',                   # Oracle ROWID -> PostgreSQL TEXT
-        'UROWID': 'TEXT',                  # Oracle UROWID -> PostgreSQL TEXT
-        'XMLTYPE': 'XML',                  # Oracle XMLTYPE -> PostgreSQL XML
-        'LONG': 'TEXT',                    # Oracle LONG -> PostgreSQL TEXT
-    }
+#         # Other types
+#         'ROWID': 'TEXT',                   # Oracle ROWID -> PostgreSQL TEXT
+#         'UROWID': 'TEXT',                  # Oracle UROWID -> PostgreSQL TEXT
+#         'XMLTYPE': 'XML',                  # Oracle XMLTYPE -> PostgreSQL XML
+#         'LONG': 'TEXT',                    # Oracle LONG -> PostgreSQL TEXT
+#     }
 
-    # Default to TEXT if the type is not mapped
-    pg_type = mapping.get(data_type.upper(), 'TEXT')  
-    logging.debug(f"Mapping Oracle type '{data_type}' to PostgreSQL type '{pg_type}'")
-    return pg_type
+#     # Default to TEXT if the type is not mapped
+#     pg_type = mapping.get(data_type.upper(), 'TEXT')  
+#     logging.debug(f"Mapping Oracle type '{data_type}' to PostgreSQL type '{pg_type}'")
+#     return pg_type
 
-def create_table_query(table_name, columns, constraints, dev_mode=False):
+def create_oracle_table_query(table_name, columns, constraints, dev_mode=False):
     """ Construct CREATE TABLE statement for PostgreSQL with a dev prefix if dev_mode is True."""
     # Apply prefix based on dev_mode
     prefixed_table_name = f"{'oracle_' + table_name}_dev" if dev_mode else f"oracle_{table_name}"
@@ -158,7 +158,7 @@ def backup_oracle_to_postgres(tables=None, sample_size=None, drop_existing=False
             columns = oracle_db.get_table_columns(table_name)
             constraints = oracle_db.get_constraints(table_name)
 
-            create_query = create_table_query(table_name, columns, constraints, dev_mode=dev_mode)
+            create_query = create_oracle_table_query(table_name, columns, constraints, dev_mode=dev_mode)
             prefixed_table_name = f"{'oracle_' + table_name}_dev" if dev_mode else f"oracle_{table_name}"
 
             # Drop existing table if needed
@@ -197,11 +197,12 @@ if __name__ == "__main__":
     #                     'CODE_TYPE_VALUES', 'CODE_TYPES', 'CL_STATUS_HISTORY', 'ECR_SYNCHRONIZATION_ACTION',
     #                     'ECR_SYNCHRONIZATION_ACTION_LOG']  # Change this to a list of table names to specify, e.g., ['COLLISIONS']
     
-    dev_mode = False  # Set dev_mode to True or False as needed
+    dev_mode = True  # Set dev_mode to True or False as needed
     drop_existing = True
-    sample_size = None
-    tables_to_backup = ['COLLISIONS', 'CL_OBJECTS', 'CLOBJ_PARTY_INFO', 'CLOBJ_PROPERTY_INFO', 'ECR_COLL_PLOTTING_INFO',
-                        'CODE_TYPE_VALUES', 'CODE_TYPES', 'CL_STATUS_HISTORY', 'ECR_SYNCHRONIZATION_ACTION',
-                        'ECR_SYNCHRONIZATION_ACTION_LOG'] # Change this to a list of table names to specify, e.g., ['COLLISIONS']
+    sample_size = 888
+    # tables_to_backup = ['COLLISIONS', 'CL_OBJECTS', 'CLOBJ_PARTY_INFO', 'CLOBJ_PROPERTY_INFO', 'ECR_COLL_PLOTTING_INFO',
+    #                     'CODE_TYPE_VALUES', 'CODE_TYPES', 'CL_STATUS_HISTORY', 'ECR_SYNCHRONIZATION_ACTION',
+    #                     'ECR_SYNCHRONIZATION_ACTION_LOG'] # Change this to a list of table names to specify, e.g., ['COLLISIONS']
+    tables_to_backup = ['COLLISIONS'] # Change this to a list of table names to specify, e.g., ['COLLISIONS']
     
     backup_oracle_to_postgres(tables=tables_to_backup, sample_size=sample_size, drop_existing=drop_existing, dev_mode=dev_mode)

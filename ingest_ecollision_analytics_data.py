@@ -5,7 +5,7 @@ import logging
 
 from reference import ecollision_analytics_db_table_primary_key 
 from helper import time_execution
-from helper_db_operation import AnalyticsDB, PostgreSQLDB
+from helper_db_operation import AnalyticsDB, PostgreSQLDB, map_analytics_db_to_postgres
 
 # Set up logging configuration
 logging.basicConfig(level=logging.CRITICAL, 
@@ -13,57 +13,57 @@ logging.basicConfig(level=logging.CRITICAL,
 
 load_dotenv()
 
-def map_analytics_db_to_postgres(data_type):
-    """ Map MS SQL Server types to PostgreSQL data types """
-    mapping = {
-        # String types
-        'varchar': 'VARCHAR',
-        'nvarchar': 'VARCHAR',            # SQL Server nvarchar
-        'char': 'CHAR',
-        'nchar': 'CHAR',
-        'text': 'TEXT',
-        'ntext': 'TEXT',
+# def map_analytics_db_to_postgres(data_type):
+#     """ Map MS SQL Server types to PostgreSQL data types """
+#     mapping = {
+#         # String types
+#         'varchar': 'VARCHAR',
+#         'nvarchar': 'VARCHAR',            # SQL Server nvarchar
+#         'char': 'CHAR',
+#         'nchar': 'CHAR',
+#         'text': 'TEXT',
+#         'ntext': 'TEXT',
 
-        # Integer types
-        'int': 'INTEGER',
-        'smallint': 'SMALLINT',
-        'tinyint': 'SMALLINT',            # PostgreSQL does not have TINYINT; SMALLINT is closest
-        'bigint': 'BIGINT',
+#         # Integer types
+#         'int': 'INTEGER',
+#         'smallint': 'SMALLINT',
+#         'tinyint': 'SMALLINT',            # PostgreSQL does not have TINYINT; SMALLINT is closest
+#         'bigint': 'BIGINT',
 
-        # Decimal and float types
-        'decimal': 'DECIMAL',
-        'numeric': 'NUMERIC',
-        'float': 'DOUBLE PRECISION',
-        'real': 'REAL',                   # SQL Server REAL -> PostgreSQL REAL
+#         # Decimal and float types
+#         'decimal': 'DECIMAL',
+#         'numeric': 'NUMERIC',
+#         'float': 'DOUBLE PRECISION',
+#         'real': 'REAL',                   # SQL Server REAL -> PostgreSQL REAL
         
-        # Date and time types
-        'datetime': 'TIMESTAMP',
-        'datetime2': 'TIMESTAMP',         # SQL Server datetime2 -> PostgreSQL TIMESTAMP
-        'smalldatetime': 'TIMESTAMP',     # SQL Server smalldatetime -> PostgreSQL TIMESTAMP
-        'date': 'DATE',
-        'time': 'TIME',
+#         # Date and time types
+#         'datetime': 'TIMESTAMP',
+#         'datetime2': 'TIMESTAMP',         # SQL Server datetime2 -> PostgreSQL TIMESTAMP
+#         'smalldatetime': 'TIMESTAMP',     # SQL Server smalldatetime -> PostgreSQL TIMESTAMP
+#         'date': 'DATE',
+#         'time': 'TIME',
 
-        # Boolean types
-        'bit': 'BOOLEAN',                 # SQL Server bit -> PostgreSQL BOOLEAN
+#         # Boolean types
+#         'bit': 'BOOLEAN',                 # SQL Server bit -> PostgreSQL BOOLEAN
 
-        # Binary types
-        'binary': 'BYTEA',
-        'varbinary': 'BYTEA',
-        'image': 'BYTEA',
+#         # Binary types
+#         'binary': 'BYTEA',
+#         'varbinary': 'BYTEA',
+#         'image': 'BYTEA',
 
-        # Other types
-        'uniqueidentifier': 'UUID',       # SQL Server uniqueidentifier -> PostgreSQL UUID
-        'xml': 'XML',
-        'money': 'NUMERIC',               # SQL Server money -> PostgreSQL NUMERIC
-        'smallmoney': 'NUMERIC',          # SQL Server smallmoney -> PostgreSQL NUMERIC
-    }
+#         # Other types
+#         'uniqueidentifier': 'UUID',       # SQL Server uniqueidentifier -> PostgreSQL UUID
+#         'xml': 'XML',
+#         'money': 'NUMERIC',               # SQL Server money -> PostgreSQL NUMERIC
+#         'smallmoney': 'NUMERIC',          # SQL Server smallmoney -> PostgreSQL NUMERIC
+#     }
 
-    # Default to TEXT if the type is not mapped
-    pg_type = mapping.get(data_type.lower(), 'TEXT')  
-    logging.debug(f"Mapping MS SQL Server type '{data_type}' to PostgreSQL type '{pg_type}'")
-    return pg_type
+#     # Default to TEXT if the type is not mapped
+#     pg_type = mapping.get(data_type.lower(), 'TEXT')  
+#     logging.debug(f"Mapping MS SQL Server type '{data_type}' to PostgreSQL type '{pg_type}'")
+#     return pg_type
 
-def create_table_query(table_name, columns, constraints, dev_mode=False):
+def create_analytics_table_query(table_name, columns, constraints, dev_mode=False):
     # Prefix the table name with 'analytics_' and add '_dev' suffix if dev_mode is enabled
     suffix = "_dev" if dev_mode else ""
     prefixed_table_name = f"analytics_{table_name}{suffix}"
@@ -144,7 +144,7 @@ def backup_analytics_to_postgres(tables=None, sample_size=None, batch_size=100, 
             
             columns = analytics_db.get_table_columns(table_name)
             constraints = analytics_db.get_constraints(table_name)
-            create_query = create_table_query(table_name, columns, constraints, dev_mode=dev_mode)
+            create_query = create_analytics_table_query(table_name, columns, constraints, dev_mode=dev_mode)
 
             try:
                 logging.debug(f"Executing create table query for {table_name}.")
@@ -201,7 +201,7 @@ if __name__ == "__main__":
     #                     'CODE_TYPE_VALUES', 'CODE_TYPES', 'CL_STATUS_HISTORY', 'ECR_SYNCHRONIZATION_ACTION_ETL',
     #                     'ECR_SYNCHRONIZATION_ACTION_LOG_ETL']
     tables_to_backup = ['COLLISIONS']
-    sample_size = 10000
+    sample_size = 888
     batch_size = None
     
     # Enable dev_mode to use _dev table suffix
