@@ -13,56 +13,6 @@ logging.basicConfig(level=logging.CRITICAL,
 
 load_dotenv()
 
-# def map_analytics_db_to_postgres(data_type):
-#     """ Map MS SQL Server types to PostgreSQL data types """
-#     mapping = {
-#         # String types
-#         'varchar': 'VARCHAR',
-#         'nvarchar': 'VARCHAR',            # SQL Server nvarchar
-#         'char': 'CHAR',
-#         'nchar': 'CHAR',
-#         'text': 'TEXT',
-#         'ntext': 'TEXT',
-
-#         # Integer types
-#         'int': 'INTEGER',
-#         'smallint': 'SMALLINT',
-#         'tinyint': 'SMALLINT',            # PostgreSQL does not have TINYINT; SMALLINT is closest
-#         'bigint': 'BIGINT',
-
-#         # Decimal and float types
-#         'decimal': 'DECIMAL',
-#         'numeric': 'NUMERIC',
-#         'float': 'DOUBLE PRECISION',
-#         'real': 'REAL',                   # SQL Server REAL -> PostgreSQL REAL
-        
-#         # Date and time types
-#         'datetime': 'TIMESTAMP',
-#         'datetime2': 'TIMESTAMP',         # SQL Server datetime2 -> PostgreSQL TIMESTAMP
-#         'smalldatetime': 'TIMESTAMP',     # SQL Server smalldatetime -> PostgreSQL TIMESTAMP
-#         'date': 'DATE',
-#         'time': 'TIME',
-
-#         # Boolean types
-#         'bit': 'BOOLEAN',                 # SQL Server bit -> PostgreSQL BOOLEAN
-
-#         # Binary types
-#         'binary': 'BYTEA',
-#         'varbinary': 'BYTEA',
-#         'image': 'BYTEA',
-
-#         # Other types
-#         'uniqueidentifier': 'UUID',       # SQL Server uniqueidentifier -> PostgreSQL UUID
-#         'xml': 'XML',
-#         'money': 'NUMERIC',               # SQL Server money -> PostgreSQL NUMERIC
-#         'smallmoney': 'NUMERIC',          # SQL Server smallmoney -> PostgreSQL NUMERIC
-#     }
-
-#     # Default to TEXT if the type is not mapped
-#     pg_type = mapping.get(data_type.lower(), 'TEXT')  
-#     logging.debug(f"Mapping MS SQL Server type '{data_type}' to PostgreSQL type '{pg_type}'")
-#     return pg_type
-
 def create_analytics_table_query(table_name, columns, constraints, dev_mode=False):
     # Prefix the table name with 'analytics_' and add '_dev' suffix if dev_mode is enabled
     suffix = "_dev" if dev_mode else ""

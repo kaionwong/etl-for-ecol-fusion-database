@@ -19,39 +19,6 @@ logging.basicConfig(level=logging.CRITICAL,
 
 load_dotenv()
 
-# def map_analytics_db_to_postgres(data_type):
-#     """ Map MS SQL Server types to PostgreSQL data types """
-#     mapping = {
-#         'varchar': 'VARCHAR',
-#         'nvarchar': 'VARCHAR',
-#         'char': 'CHAR',
-#         'nchar': 'CHAR',
-#         'text': 'TEXT',
-#         'ntext': 'TEXT',
-#         'int': 'INTEGER',
-#         'smallint': 'SMALLINT',
-#         'tinyint': 'SMALLINT',
-#         'bigint': 'BIGINT',
-#         'decimal': 'DECIMAL',
-#         'numeric': 'NUMERIC',
-#         'float': 'DOUBLE PRECISION',
-#         'real': 'REAL',
-#         'datetime': 'TIMESTAMP',
-#         'datetime2': 'TIMESTAMP',
-#         'smalldatetime': 'TIMESTAMP',
-#         'date': 'DATE',
-#         'time': 'TIME',
-#         'bit': 'BOOLEAN',
-#         'binary': 'BYTEA',
-#         'varbinary': 'BYTEA',
-#         'image': 'BYTEA',
-#         'uniqueidentifier': 'UUID',
-#         'xml': 'XML',
-#         'money': 'NUMERIC',
-#         'smallmoney': 'NUMERIC',
-#     }
-#     return mapping.get(data_type.lower(), 'TEXT')
-
 def create_fusion_table_query(table_name, columns, constraints, dev_mode=False):
     # Use the "fusion_" prefix instead of "analytics_"
     suffix = "_dev" if dev_mode else ""
