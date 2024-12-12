@@ -28,6 +28,9 @@ def create_fusion_table_query(table_name, columns, constraints, dev_mode=False):
         nullable = 'NOT NULL' if column[3] == 'NO' else ''
         column_defs.append(f"{col_name} {data_type} {nullable}".strip())
 
+    # Add the SOURCE column to all tables (i.e., "eCollision Oracle" or "eCollision Analytics")
+    column_defs.append("SOURCE TEXT")
+
     if primary_key_column:
         column_defs.append(f"PRIMARY KEY ({primary_key_column})")
 
@@ -109,7 +112,7 @@ def create_empty_fusion_tables_in_postgres(tables=None, dev_mode=False, drop_exi
         logging.error(f"An error occurred during the table creation process: {e}")
         
 if __name__ == "__main__":
-    dev_mode = False
+    dev_mode = True
     drop_existing = True
     tables_to_create = ['COLLISIONS', 'CL_OBJECTS', 'CLOBJ_PARTY_INFO', 'CLOBJ_PROPERTY_INFO', 'ECR_COLL_PLOTTING_INFO',
                          'CODE_TYPE_VALUES', 'CODE_TYPES', 'CL_STATUS_HISTORY', 'ECR_SYNCHRONIZATION_ACTION_ETL',
